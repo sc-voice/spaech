@@ -1,22 +1,28 @@
 (function(exports) {
   const { logger } = require('log-instance');
   const assert = require('assert');
+  const OVERLAP = 9;
 
   class Chart {
     constructor(args={}) {
       let {
         data=[],
-        lines=13,
+        lines=15,
         precision=2,
+        yTicks=4,
         xTicks=10,
+        xTicks2=50,
         title='Chart',
+        lineLength=100,
       } = args;
 
       this.data = data;
       this.lines = lines;
       this.precision = precision;
       this.xTicks = xTicks;
+      this.yTicks = yTicks;
       this.title = title;
+      this.lineLength = lineLength;
     }
 
     stats(data=[]) {
@@ -36,50 +42,27 @@
       return stats;
     }
 
-    plot(args={}) {
-      let {
-        data=this.data,
-        lines=this.lines,
-        precision=this.precision,
-        xTicks=this.xTicks,
-        xInterval=1,
-        title=this.title,
-      } = args;
-      if (!Array.isArray(data[0])) { data = [data]; }
-      data = data.map(ds=>ds.filter((v,i) => i%xInterval === 0));
-      let { min, max, range, width } = this.stats(data);
-      assert(!isNaN(min), `expected min for data${data}`);
-      assert(!isNaN(max), `expected max for data`);
-      assert(!isNaN(width), `expected width for data`);
-      let output = [...new Array(lines)].map(e=>new Int8Array(width));
-      let lineLast = lines - 1;
-      let line = (x)=> Math.round((max-x)*lineLast/range);
-      let yOfLine = (line)=> (line*min + (lineLast - line)*max)/lineLast; 
-      let iy0 = line(0);
+    plotRow({output,min,max,range}) {
+      let { lines, precision, yTicks, xTicks, xTicks2 } = this;
       let labelSize = 1+Math.max(
         min.toFixed(precision).length, 
         max.toFixed(precision).length);
-      data.forEach((ds,id)=>{
-        ds.forEach((d,ix)=>{
-          let iy = line(d);
-          let oiy = output[iy];
-          oiy[ix] = oiy[ix] ? 9 : (id+1) ;
-          //console.log(`output`, {iy, d});
-        });
-      });
-      let iy4 = Math.round(lines/4);
-      title && console.log(title, JSON.stringify({
-        min: min.toFixed(Math.max(5, precision)),
-        max: max.toFixed(Math.max(5, precision)), 
-        xInterval,
-      }));
+      let lineLast = lines-1;
+      let line = (x)=> Math.round((max-x)*lineLast/range);
+      let yOfLine = (line)=> (line*min + (lineLast - line)*max)/lineLast; 
+      let iy0 = line(0);
       output.forEach((ds,iy)=>{
         let line = [...ds].map((v,ix)=>{
+            let ix1 = ix+1;
+            let xTick = ix1 % xTicks2 ? ':' : '|';
+            let yTick = ix1 % xTicks 
+              ? (ix1 % 5 ? '.' : ',')
+              : ':';
             switch(v) {
               case 0: return iy === iy0 
-                ? (ix % xTicks ? '-' : '+')
-                : (iy-iy0) % iy4 ? ' ' : (ix % xTicks ? '.' : ':');
-              case 9: return '*';
+                ? (ix1 % xTicks ? (ix1 % 5 ? '-' : '+') : xTick)
+                : ((iy-iy0) % yTicks ? ' ' : yTick);
+              case OVERLAP: return '*';
               default: return v;
             }
           });
@@ -87,6 +70,43 @@
         while (label.length < labelSize) { label = ' '+label}
         console.log(label, line.join(''));
       });
+    }
+
+    plot(args={}) {
+      let {
+        data=this.data,
+        lines=this.lines,
+        xTicks=this.xTicks,
+        xInterval=1,
+        title=this.title,
+        transpose=false,
+      } = args;
+      let {precision, lineLength} = this;
+      if (!Array.isArray(data[0])) { data = [data]; }
+      data = data.map(ds=>ds.filter((v,i) => i%xInterval === 0));
+      let { min, max, range, width } = this.stats(data);
+      assert(!isNaN(min), `expected min for data${data}`);
+      assert(!isNaN(max), `expected max for data`);
+      assert(!isNaN(width), `expected width for data`);
+      let output = [...new Array(lines)].map(e=>new Int8Array(width));
+      let line = (x)=> Math.round((max - x)*(lines - 1)/range);
+      data.forEach((ds,id)=>{
+        ds.forEach((d,ix)=>{
+          let iy = line(d);
+          let oiy = output[iy];
+          oiy[ix] = oiy[ix] ? OVERLAP : (id+1) ;
+        });
+      });
+      for (let i=0; i < width; i+=lineLength) {
+        i && console.log();
+        let outRow = output.map(ds=>ds.slice(i, i+lineLength));
+        this.plotRow({output:outRow, min, max, range});
+      }
+      title && console.log(title, JSON.stringify({
+        min: min.toFixed(Math.max(5, precision)),
+        max: max.toFixed(Math.max(5, precision)), 
+        xInterval,
+      }));
     }
 
   }

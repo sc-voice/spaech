@@ -47,14 +47,6 @@
     constructor(args) {
       super(args);
       this.activation = new SnakeActivation();
-      this.stats = {
-        addWeights:0,
-        getWeights:0,
-        apply: 0,
-        build: 0,
-        call:0,
-        dispose: 0,
-      };
       this.addWeight(`magic`, [1], 'int32', tf.initializers.ones());
       tf.serialization.registerClass(Snake);
     }
@@ -62,33 +54,11 @@
     static get isNode() { return isNode(); }
     static get Activation() { return SnakeActivation; }
 
-    apply(inputs, kwargs) {
-      this.stats.apply++;
-      return super.apply(inputs, Object.assign({},kwargs, {alpha:1.2}));
-    }
-
-    dispose() {
-      this.stats.dispose++;
-      return super.dispose();
-    }
-
-    build(inputShape) {
-      this.stats.build++;
-      return super.build(inputShape);
-    }
-
-    addWeights(weights) {
-      this.stats.addWeights++;
-      return super.addWeights(weights);
-    }
-
-    getWeights(weights) {
-      this.stats.getWeights++;
-      return super.getWeights(weights);
-    }
+    //apply(inputs, kwargs) {
+      //return super.apply(inputs, Object.assign({},kwargs, {alpha:1.2}));
+    //}
 
     call(input, kwargs) {
-      this.stats.call++;
       let { bias, kernel, activation } = this;
       return tf.tidy(()=>{
         this.invokeCallHook(input, kwargs);

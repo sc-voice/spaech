@@ -111,14 +111,11 @@
     console.log(Math.random());
     return;
     snake && console.log(`snake`, {
-      stats: snake.stats, 
       activation: snake.activation, 
       bias: typeof snake.bias,
       kernel: typeof snake.kernel,
       weights: snake.getWeights(),
     });
-    //snake.dispose();
-    //should(snake.activation).equal(tf.elu);
   });
 
 })

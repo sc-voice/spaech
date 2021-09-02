@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert')
+const { logger } = require('log-instance');
+const tf = require('@tensorflow/tfjs-node');
+const { WaveFile } = require('wavefile');
+const {
+  Chart,
+  AutoEncoder,
+  Signal,
+} = require('../index');
+
+function help() {
+    console.log(`
+NAME
+        coder - compress/expand audio 
+
+SYNOPSIS
+        coder [OPTIONS] 
+
+DESCRIPTION
+        Searches bilara-data for root text or translations. Writes
+        output results in JSON to stdout, highlighting matches if
+        output is console.
+
+    -cs, --code-size
+        Number of units in the bottleneck code layer.
+
+    -du, --decoder-units N1,N2,...,NN
+        Number of units in each decoder layer: (reverse of encoderUnits)
+
+    -ep, --epochs
+        Training epochs (100)
+
+    -eu, --encoder-units N1,N2,...,NN
+        Number of units in each encoder layer: 
+        [frameSize, frameSize, frameSize/2, frameSize/3, frameSize/5]
+
+    -fs, --frame-size
+        Audio is encoded/decoded by consecutive frames of given size. (192)
+
+    -?, --help
+        Print help
+
+    -ll, --log-level
+        Logging level: warn, error, [info], debug
+
+    -lm, --load-model URL
+        JSON resource URL
+
+    -sc, --scale SCALE
+        Signal normalization (16384)
+
+    -sw, --src-wav WAVFILE
+        Source WAV file. (${EVAM_ME_SUTTAM_WAV})
+
+    -tr, --train  WAVFILE
+        Train coder from given WAVFILE
+`);
+    process.exit(0);
+}
+
+const TEST_DATA_DIR = path.join(path.dirname(__dirname), 'test/data');
+const EVAM_ME_SUTTAM_WAV = path.join(TEST_DATA_DIR, 'evam-me-suttam.wav');
+const AN9_20_4_3_WAV = path.join(TEST_DATA_DIR, 'an9.20_4.3.wav');
+const argv = process.argv;
+
+var epochs = 100;
+var scale = 16384;
+var srcWav = EVAM_ME_SUTTAM_WAV;
+var trainWav = null;
+var frameSize = 192;
+var codeSize = 6;
+var logLevel = 'info';
+var verbose = false;
+var encoderUnits = [1,1,1/2,1/3,1/5].map(v=>Math.round(v*frameSize)];
+ver decoderUnits;
+
+var nargs = process.argv.length;
+if (nargs < 3) {
+    help();
+}
+for (var i = 2; i < nargs; i++) {
+  var arg = process.argv[i];
+  if (i<2) { continue; }
+  if (arg === '-?' || arg === '--help') {
+    help();
+  } else if (arg === '-sw' || arg === '--src-wav') {
+    srcWav = argv[++i];
+  } else if (arg === '-du' || arg === '--decoder-units') {
+    decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+  } else if (arg === '-eu' || arg === '--encoder-units') {
+    encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+  } else if (arg === '-sc' || arg === '--scale') {
+    scale = Number(argv[++i]);
+  } else if (arg === '-ep' || arg === '--epochs') {
+    epochs = Number(argv[++i]);
+  } else if (arg === '-cs' || arg === '--code-size') {
+    codeSize = Number(argv[++i]);
+  } else if (arg === '-fs' || arg === '--frame-size') {
+    frameSize = Number(argv[++i]);
+  } else if (arg === '-tr' || arg === '--train') {
+    trainWav = argv[++i];
+  } else if (arg === '-ll' || arg === '--log-level') {
+    logLevel = logger.logLevel = argv[++i];
+  }
+}
+
+decoderUnits = decoderUnits || [...encoderUnits].reverse();
+
+async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
+  let buf = await fs.promises.readFile(fnam);
+  let wf = new WaveFile(buf);
+  return new Signal(wf.getSamples(false, Int16Array));
+}
+
+(async function() {
+  logger.debug({
+    codeSize,
+    epochs,
+    frameSize,
+    logLevel,
+    scale,
+    srcWav,
+    trainWav,
+    encoderUnits,
+    decoderUnits,
+
+  });
+
+  let signal = await wavSignal(srcWav);
+  logger.info(`source WAV file: ${signal.data.length} samples`);
+
+  let coder = new AutoEncoder({
+    frameSize, 
+    scale, 
+    codeSize,
+    encoderUnits,
+    decoderUnits,
+  });
+
+})();
+/*
+
+it("TESTTESTtrain()", async()=>{
+  let epochs = 100;
+  //let signal = await wavSignal(AN9_20_4_3_WAV);
+  let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
+
+  let { splits, frames } = coder.frameSignal(signal);
+  let res = await coder.train({frames, epochs});
+
+  let iTest = 10;
+  let signalTest = await wavSignal(EVAM_ME_SUTTAM_WAV);
+  let { frames:framesTest } = coder.frameSignal(signalTest);
+  let xtest = tf.tensor2d(framesTest.slice(iTest,iTest+1));
+  let { model } = coder;
+  let ytest;
+  let msStart = Date.now();
+  let reps = 100;
+  for (let i = 0; i < reps; i++) {
+    ytest = await model.predict(xtest);
+  }
+  let msElapsed = Date.now() - msStart;
+  let chart = new Chart();
+  chart.plot({
+    data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
+    title:`Signals 1:original 2:decoded in ${msElapsed/reps}ms`,
+    lines: 4*5+5,
+  });
+
+
+});
+
+})
+*/

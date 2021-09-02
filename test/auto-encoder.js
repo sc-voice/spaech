@@ -8,12 +8,11 @@
     Chart,
     AutoEncoder,
     Signal,
-    TextToSpeech,
-    WordWindow,
   } = require('../index');
   this.timeout(120*1000);
 
   const EVAM_ME_SUTTAM_WAV = path.join(__dirname, 'data/evam-me-suttam.wav');
+  const KATAME_PANCA_WAV = path.join(__dirname, 'data/katame-panca.wav');
   const EVAM_ME_SUTTAM_TXT = path.join(__dirname, 'data/evam-me-suttam.txt');
   const AN9_20_4_3_WAV = path.join(__dirname, 'data/an9.20_4.3.wav');
 
@@ -62,38 +61,37 @@
     should(frames.length).equal(nFrames);
   });
   it("TESTTESTtrain()", async()=>{
-    let verbose = 1;
-    let frameSize = 192;
-    let codeSize = Math.round(frameSize/32);
-    let scale = 16384;
-    let coder = new AutoEncoder({frameSize, scale, codeSize});
-    let epochs = 100;
-    //let signal = await wavSignal(AN9_20_4_3_WAV);
-    let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
+    let frameSize = 96;         // signal compression unit
+    let codeSize = 6;           // units in code layer
+    let e0 = frameSize * 0.9;   // first layer number of units
+    let e1 = 0.5;               // layer decay
+    let nLayers = 2;            // encoder/decoder layers
+    let encoderUnits = [ e0, e0*e1, e0*e1*e1, e0*e1*e1*e1, e0*e1*e1*e1*e1, ].slice(0,nLayers);
+    let scale = 16384;          // signal normalization
+    let codeActivation = 'elu'; // code layer activation function
 
+    // Train on one set of sounds from a speaker
+    let coder = new AutoEncoder({frameSize, scale, codeSize, encoderUnits, codeActivation});
+    let epochs = 50;            // more epochs will train better
+    let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
     let { splits, frames } = coder.frameSignal(signal);
     let res = await coder.train({frames, epochs});
 
-    let iTest = 10;
-    let signalTest = await wavSignal(EVAM_ME_SUTTAM_WAV);
+    // Test using completely different sound from same speaker
+    let signalTest = await wavSignal(KATAME_PANCA_WAV);
     let { frames:framesTest } = coder.frameSignal(signalTest);
+    let iTest = 32; // arbitrary frame from middle of the signal
     let xtest = tf.tensor2d(framesTest.slice(iTest,iTest+1));
     let { model } = coder;
-    let ytest;
     let msStart = Date.now();
-    let reps = 100;
-    for (let i = 0; i < reps; i++) {
-      ytest = await model.predict(xtest);
-    }
+    for (var reps=0; reps < 100; reps++){ var ytest = await model.predict(xtest); }
     let msElapsed = Date.now() - msStart;
     let chart = new Chart();
     chart.plot({
       data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
       title:`Signals 1:original 2:decoded in ${msElapsed/reps}ms`,
-      lines: 4*5+5,
     });
-
-
+    model.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
   });
 
 })

@@ -13,15 +13,26 @@
       let {
         model,
         frameSize = 192,
+        codeActivation = 'snake',
         codeSize = 96,
         scale = 16384,
         sampleRate = 22050,
         threshold = 2,
         dampen = 36,
+        encoderUnits,
+        decoderUnits,
       } = args;
 
+      encoderUnits = encoderUnits || [1,1,1/2,1/3,1/5].map(v=>frameSize*v);
+      assert(Array.isArray(encoderUnits), "Expected Array for encoderUnits");
+      encoderUnits = encoderUnits.map(v=>Math.round(v));
+      decoderUnits = decoderUnits || [...encoderUnits].reverse();
+      assert(Array.isArray(decoderUnits), "Expected Array for decoderUnits");
+      decoderUnits = decoderUnits.map(v=>Math.round(v));
       Object.assign(this, {
-        scale, threshold, dampen, sampleRate, frameSize, codeSize,
+        scale, threshold, dampen, sampleRate, 
+        frameSize, codeSize, codeActivation,
+        encoderUnits, decoderUnits,
       });
       Object.defineProperty(this, '_model', {
         writable: true,
@@ -45,56 +56,31 @@
     }
 
     createModel() {
-      let { frameSize, codeSize, } = this;
+      let { frameSize, codeSize, encoderUnits, decoderUnits, codeActivation} = this;
       let inputShape = [frameSize];
       let  model = tf.sequential();
-      let units0  = 0 ? Math.round(frameSize/1) : 0;
-      let units1  = 1 ? Math.round(frameSize/1) : 0;
-      let units1a = 1 ? Math.round(frameSize/1) : 0;
-      let units2  = 1 ? Math.round(frameSize/2) : 0;
-      let units2a = 0 ? Math.round(frameSize/2) : 0;
-      let units3  = 1 ? Math.round(frameSize/3) : 0;
-      let units4  = 0 ? Math.round(frameSize/4) : 0;
-      let units5  = 1 ? Math.round(frameSize/5) : 0;
-      let units6  = 0 ? Math.round(frameSize/6) : 0;
-      let units8  = 0 ? Math.round(frameSize/8) : 0;
-      let units10 = 0 ? Math.round(frameSize/10) : 0;
-      let units13 = 0 ? Math.round(frameSize/13) : 0;
-      let units16 = 0 ? Math.round(frameSize/16) : 0;
 
-      model.add(tf.layers.dense({units:frameSize, inputShape, activation:'relu'}));
+      encoderUnits.forEach((units,i)=> i==0
+        ? model.add(new Snake({units, inputShape}))
+        : model.add(new Snake({units}))
+      );
 
-      // encoder
-      units0 && model.add(tf.layers.dense({units:units0, activation:'elu'}));
-      units1 && model.add(new Snake({units: units1}));
-      units1a && model.add(new Snake({units: units1a}));
-      units2 && model.add(new Snake({units: units2}));
-      units2a && model.add(new Snake({units: units2a}));
-      units3 && model.add(new Snake({units: units3}));
-      units4 && model.add(new Snake({units: units4}));
-      units5 && model.add(new Snake({units: units5}));
-      units6 && model.add(new Snake({units: units6}));
-      units8 && model.add(new Snake({units: units8}));
-      units10 && model.add(new Snake({units: units10}));
-      units13 && model.add(new Snake({units: units13}));
-      units16 && model.add(new Snake({units: units16}));
+      if (codeActivation === 'snake') {
+        model.add(new Snake({
+          units: codeSize,
+          name: `code_${codeActivation}`,
+        }))
+      } else {
+        model.add(tf.layers.dense({
+          units: codeSize, activation:codeActivation,
+          name: `code_${codeActivation}`,
+        }));
+      }
 
-      model.add(tf.layers.dense({units: codeSize, activation:'elu'}));
-
-      // decoderer
-      units16 && model.add(new Snake({units: units16}));
-      units13 && model.add(new Snake({units: units13}));
-      units8 && model.add(new Snake({units: units8}));
-      units6 && model.add(new Snake({units: units6}));
-      units5 && model.add(new Snake({units: units5}));
-      units4 && model.add(new Snake({units: units4}));
-      units3 && model.add(new Snake({units: units3}));
-      units2a && model.add(new Snake({units: units2a}));
-      units2 && model.add(new Snake({units: units2}));
-      units1a && model.add(new Snake({units: units1a}));
-      units1 && model.add(new Snake({units: units1}));
-      units0 && model.add(tf.layers.dense({units:units0, activation:'elu'}));
-      model.add(tf.layers.dense({units:frameSize, activation:'elu'}));
+      decoderUnits.forEach((units,i)=> i === decoderUnits.length-1
+        ? model.add(new Snake({units: frameSize}))
+        : model.add(new Snake({units})) 
+      );
 
       return model;
     }
@@ -154,7 +140,6 @@
       model.compile({optimizer, loss, metrics});
 
       let tx = tf.tensor2d(frames);
-      model.summary();
       return model.fit(tx, tx, Object.assign({}, args, {
         batchSize, 
         epochs, 
