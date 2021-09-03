@@ -22,7 +22,7 @@
     return new Signal(wf.getSamples(false, Int16Array));
   }
 
-  it("TESTTESTdefault ctor", async()=>{
+  it("default ctor", async()=>{
     let coder = new AutoEncoder();
     should(coder.threshold).equal(2);
     should(coder.sampleRate).equal(22050);
@@ -60,7 +60,7 @@
     });
     should(frames.length).equal(nFrames);
   });
-  it("TESTTESTtrain()", async()=>{
+  it("train()", async()=>{
     let frameSize = 96;         // signal compression unit
     let codeSize = 6;           // units in code layer
     let e0 = frameSize * 0.9;   // first layer number of units
@@ -92,6 +92,45 @@
       title:`Signals 1:original 2:decoded in ${msElapsed/reps}ms`,
     });
     model.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
+  });
+  it("getWeights()", async()=>{
+    let frameSize = 96;         // signal compression unit
+    let codeSize = 6;           // units in code layer
+    let e0 = frameSize * 0.9;   // first layer number of units
+    let e1 = 0.5;               // layer decay
+    let nLayers = 2;            // encoder/decoder layers
+    let encoderUnits = [ e0, e0*e1, e0*e1*e1, e0*e1*e1*e1, e0*e1*e1*e1*e1, ].slice(0,nLayers);
+    let scale = 16384;          // signal normalization
+    let codeActivation = 'elu'; // code layer activation function
+    let coder = new AutoEncoder({frameSize, scale, codeSize, encoderUnits, codeActivation});
+    let epochs = 50;            // more epochs will train better
+    let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
+    let { splits, frames } = coder.frameSignal(signal);
+    let res = await coder.train({frames, epochs});
+
+    let { model } = coder;
+    let model2 = coder.createModel();
+    let layers2 = model2.layers;
+
+    // we can assign weights layer by layer
+    for (let i = 0; i < layers2.length; i++) {
+      let layer2 = layers2[i];
+      let layer1 = model.layers[i];
+      let weights = layer1.getWeights();
+      layer2.setWeights(weights);
+    }
+
+    // copied model is encodes/decodes signal
+    let iTest = 32; // arbitrary frame from middle of the signal
+    let xtest = tf.tensor2d(frames.slice(iTest,iTest+1));
+    let ytest = await model2.predict(xtest);
+    let chart = new Chart();
+    chart.plot({
+      data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
+      title:`Model2 signals 1:original 2:decoded`,
+    });
+    model2.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
+    
   });
 
 })

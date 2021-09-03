@@ -75,8 +75,8 @@ var frameSize = 192;
 var codeSize = 6;
 var logLevel = 'info';
 var verbose = false;
-var encoderUnits = [1,1,1/2,1/3,1/5].map(v=>Math.round(v*frameSize)];
-ver decoderUnits;
+var encoderUnits;
+var decoderUnits;
 
 var nargs = process.argv.length;
 if (nargs < 3) {
@@ -108,6 +108,7 @@ for (var i = 2; i < nargs; i++) {
   }
 }
 
+encoderUnits = encoderUnits || [frameSize];
 decoderUnits = decoderUnits || [...encoderUnits].reverse();
 
 async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
@@ -140,39 +141,31 @@ async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
     encoderUnits,
     decoderUnits,
   });
-
-})();
-/*
-
-it("TESTTESTtrain()", async()=>{
-  let epochs = 100;
-  //let signal = await wavSignal(AN9_20_4_3_WAV);
-  let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
-
-  let { splits, frames } = coder.frameSignal(signal);
-  let res = await coder.train({frames, epochs});
-
-  let iTest = 10;
-  let signalTest = await wavSignal(EVAM_ME_SUTTAM_WAV);
-  let { frames:framesTest } = coder.frameSignal(signalTest);
-  let xtest = tf.tensor2d(framesTest.slice(iTest,iTest+1));
   let { model } = coder;
-  let ytest;
-  let msStart = Date.now();
-  let reps = 100;
-  for (let i = 0; i < reps; i++) {
-    ytest = await model.predict(xtest);
+  model.summary();
+
+  if (trainWav) {
+    let signalTrain = await wavSignal(EVAM_ME_SUTTAM_WAV);
+    let { splits, frames } = coder.frameSignal(signalTrain);
+    let res = await coder.train({frames, epochs});
+
+    let iTest = 32;
+    let signalTest = await wavSignal(srcWav);
+    let { frames:framesTest } = coder.frameSignal(signalTest);
+    let xtest = tf.tensor2d(framesTest.slice(iTest,iTest+1));
+    let { model } = coder;
+    let ytest;
+    let msStart = Date.now();
+    let reps = 100;
+    for (let i = 0; i < reps; i++) {
+      ytest = await model.predict(xtest);
+    }
+    let msElapsed = Date.now() - msStart;
+    let chart = new Chart();
+    chart.plot({
+      data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
+      title:`Signals 1:original 2:decoded in ${msElapsed/reps}ms`,
+      lines: 4*5+5,
+    });
   }
-  let msElapsed = Date.now() - msStart;
-  let chart = new Chart();
-  chart.plot({
-    data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
-    title:`Signals 1:original 2:decoded in ${msElapsed/reps}ms`,
-    lines: 4*5+5,
-  });
-
-
-});
-
-})
-*/
+})();

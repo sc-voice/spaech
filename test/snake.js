@@ -117,5 +117,54 @@
       weights: snake.getWeights(),
     });
   });
+  it("TESTTESTserialize", async()=>{
+    let nSamp = 192;  
+    let groundTruth = [];
+    let nExamples = 500;
+    let epochs = 50; 
+    for (let i = 0; i < nExamples; i++) {
+      let fSig = 20*Math.random() + 90;
+      groundTruth.push({fSig, nSamp});
+    }
+    let signals = groundTruth.map(gt=>sineSignal(gt));
+
+    const model = tf.sequential();
+    let inputShape = [nSamp];
+    model.add(new Snake({units: nSamp, inputShape}));
+    model.add(new Snake({units: nSamp}));
+    model.add(tf.layers.dense({units: 1, activation:'elu'}));
+
+    model.compile({ optimizer: 'adam', loss: 'meanSquaredError', metrics: ['accuracy'] });
+
+    let x = tf.tensor2d(signals);
+    let y = tf.tensor2d(groundTruth.map(gt => [gt.fSig]));
+
+    // Fitting the model
+    let history = await model.fit(x, y, {
+        epochs,
+        batchSize: 64,
+        verbose: 0, // nodejs is too chatty
+        validationSplit: 0.5,
+        callbacks: {
+          onEpochEnd: (epoch, log) => 
+            ((epoch+1) % 10===0) && console.log(`Epoch${epoch}: `, JSON.stringify(log))
+        },
+    });
+
+    let saveUrl = `file:////${__dirname}/models/snake`;
+    await model.save(saveUrl);
+
+    // create copy of saved model
+    let model2 = await tf.loadLayersModel(`${saveUrl}/model.json`);
+    let testTruth = [95,100,105].map(fSig=>({fSig, nSamp}));
+    let testSignals = testTruth.map(tt=>sineSignal(tt));
+    let testX = tf.tensor2d(testSignals);
+    let predict2 = model2.predict(testX).arraySync();
+
+    // loaded model is same as saved model
+    let predict = model.predict(testX).arraySync();
+    should.deepEqual(predict2, predict);
+    return;
+  });
 
 })

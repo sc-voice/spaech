@@ -47,8 +47,6 @@
     constructor(args) {
       super(args);
       this.activation = new SnakeActivation();
-      this.addWeight(`magic`, [1], 'int32', tf.initializers.ones());
-      tf.serialization.registerClass(Snake);
     }
 
     static get isNode() { return isNode(); }
@@ -79,6 +77,9 @@
     }
 
   }
+
+  tf.serialization.registerClass(SnakeActivation);
+  tf.serialization.registerClass(Snake);
 
   module.exports = exports.Snake = Snake;
 })(typeof exports === "object" ? exports : (exports = {}));

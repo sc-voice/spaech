@@ -55,6 +55,13 @@
       return model;
     }
 
+    getWeights() {
+      let { model } = this;
+      let { layers } = model;
+
+      return layers.map(layer => layer.getWeights());
+    }
+
     createModel() {
       let { frameSize, codeSize, encoderUnits, decoderUnits, codeActivation} = this;
       let inputShape = [frameSize];
