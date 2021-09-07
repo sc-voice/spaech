@@ -12,6 +12,15 @@
   const EVAM_ME_SUTTAM = path.join(__dirname, 'data/evam-me-suttam.wav');
   const AN9_20_4_3 = path.join(__dirname, 'data/an9.20_4.3.wav');
 
+  it("default ctor", ()=>{
+    console.warn('----------EXPECTED ERROR (BEGIN)-----------------');
+    try {
+      var eCaught;
+      new Signal();
+    } catch(e) { eCaught = e };
+    console.warn('----------EXPECTED ERROR (END)-----------------');
+    should(eCaught.message).equal('E_SIGNAL_ARRAY');
+  });
   it("custom ctor", ()=>{
     let data = [1, 2, 3, 5, 4];
     let sig = new Signal(data);
@@ -23,11 +32,14 @@
     let sig = new Signal(a);
     should.deepEqual(sig.rmsErr(b), Signal.rmsErr(a,b));
   });
-  it("stats() => stats", async()=>{
+  it("TESTTESTstats() => stats", async()=>{
     let dataOdd = [1, 2, 3, 5, 4];
     should.deepEqual(Signal.stats(dataOdd), {
       count: 5,
       avg: 3,
+      iMax: 3,
+      iMin: 0,
+      avg32: 3,
       median: 3,
       sum: 15,
       max: 5,
@@ -38,6 +50,9 @@
     should.deepEqual(Signal.stats(dataEven), {
       count: 6,
       avg: 12.5,
+      avg32: 12.5,
+      iMax: 5,
+      iMin: 0,
       median: 3.5,
       sum: 75,
       max: 60,
@@ -120,7 +135,7 @@
     should.deepEqual(splitBlocks[2], {start: 326, length: 212});  // suttaṁ
     should(splitBlocks.length).equal(3);
   });
-  it("WAV files", async()=>{
+  it("TESTTESTWAV files", async()=>{
     let verbose = 1;
     let buf = await fs.promises.readFile(AN9_20_4_3);
     let wf = new WaveFile(buf);
@@ -134,11 +149,16 @@
       count: 2626031,
       min: -15311,
       max: 15371,
+      iMin: 943090,
+      iMax: 1764940,
       sum: 2340943,
       avg: 0.8914376867599811,
+      avg32: 0.8914377093315125,
       median: -1,
-      stdDev: 1803.5445484390946,
+      stdDev: 1803.544548440329,
     });
+    should(s16[stats.iMin]).equal(stats.min);
+    should(s16[stats.iMax]).equal(stats.max);
   });
   it("toInt16Array() => Int16Array", async()=>{
     // from Array
@@ -161,7 +181,7 @@
     should(samples.constructor.name).equal('Int16Array');
     should(samples.length).equal(2626031);
   });
-  it("stats(AN9_20_4_3) => iterators are slower than loops", async()=>{
+  it("TESTTESTstats(AN9_20_4_3) => iterators are slower than loops", async()=>{
     let buf = await fs.promises.readFile(AN9_20_4_3);
     let wf = new WaveFile(buf);
     let samples = wf.getSamples(false, Int16Array);
@@ -201,7 +221,7 @@
     let elapsed = Date.now() - msStart;
     verbose && console.log(`elapsed loop`, elapsed, JSON.stringify(stats2));
     should(stats2).properties({
-      stdDev: 1803.5445484390946, // differs slightly from statsExpected
+      stdDev: 1803.544548440329, // differs slightly from statsExpected
     });
 
     should(stats2).properties(stats1);

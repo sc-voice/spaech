@@ -12,7 +12,7 @@
   "dependencies": {
     "@tensorflow/tfjs-node": "^3.9.0",
     "assert": "^2.0.0",
-    "log-instance": "^0.2.6"
+    "log-instance": "^1.2.0"
   },
   "devDependencies": {
     "mocha": "^9.0.1",

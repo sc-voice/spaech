@@ -6,33 +6,44 @@
   const Signal = require('./signal');
   const Snake = require('./snake');
   const Chart = require('./chart');
+  const FRAME_SIZE = 192;
+  const N_LAYERS = 3;
 
   class AutoEncoder {
     constructor(args={}) {
       logger.logInstance(this);
       let {
         model,
-        frameSize = 192,
+        frameSize = FRAME_SIZE,
         codeActivation = 'snake',
         codeSize = 96,
         scale = 16384,
         sampleRate = 22050,
         threshold = 2,
         dampen = 36,
-        encoderUnits,
+        logEpoch = 10,
+        encoderUnits=0.8,
+        encoderLayers=N_LAYERS,
+        encoderAlpha=1.61803398875, // Golden Ratio is least resonant
         decoderUnits,
+        decoderAlpha,
       } = args;
 
-      encoderUnits = encoderUnits || [1,1,1/2,1/3,1/5].map(v=>frameSize*v);
+      encoderUnits = AutoEncoder.coderUnits(encoderUnits, frameSize, encoderLayers);
       assert(Array.isArray(encoderUnits), "Expected Array for encoderUnits");
       encoderUnits = encoderUnits.map(v=>Math.round(v));
       decoderUnits = decoderUnits || [...encoderUnits].reverse();
       assert(Array.isArray(decoderUnits), "Expected Array for decoderUnits");
       decoderUnits = decoderUnits.map(v=>Math.round(v));
+      decoderAlpha = decoderAlpha || (typeof encoderAlpha  === 'number' 
+        ? encoderAlpha 
+        : [...encoderAlpha].reverse());
       Object.assign(this, {
-        scale, threshold, dampen, sampleRate, 
+        scale, threshold, dampen, sampleRate, logEpoch,
         frameSize, codeSize, codeActivation,
         encoderUnits, decoderUnits,
+        encoderAlpha, decoderAlpha,
+        encoderLayers,
       });
       Object.defineProperty(this, '_model', {
         writable: true,
@@ -40,10 +51,28 @@
       });
     }
 
-    static onEpochEnd(epoch, log) {
-      if ( (epoch+1) % 10 === 0) {
-        let { val_mse, mse } = log;
-        console.log(`Epoch${epoch}: `, JSON.stringify({val_mse, mse}));
+    static coderUnits(units, frameSize=FRAME_SIZE, nLayers=N_LAYERS) {
+      if (Array.isArray(units)) {
+        return units;
+      }
+      let n = Number(units);
+      if (isNaN(n)) {
+        throw this.error('E_AE_UNITS', `Expected number or array of numbers for units:${units}`);
+      }
+      let result = [];
+      for (let i = 0; i < nLayers; i++) {
+        let v = i ? result[i-1]*units : frameSize;
+        result.push(Math.round(v));
+      }
+      return result;
+    }
+
+    static onEpochEnd(logEpoch) {
+      return (epoch, log)=>{
+        if (logEpoch && (epoch % logEpoch === 9)) {
+          let { val_mse, mse } = log;
+          console.log(`Epoch${epoch}: `, JSON.stringify({val_mse, mse}));
+        }
       }
     }
 
@@ -62,15 +91,29 @@
       return layers.map(layer => layer.getWeights());
     }
 
-    createModel() {
-      let { frameSize, codeSize, encoderUnits, decoderUnits, codeActivation} = this;
+    createModel(args={}) {
+      let { 
+        frameSize=this.frameSize, 
+        codeSize=this.codeSize, 
+        encoderUnits=this.encoderUnits,
+        decoderUnits=this.decoderUnits,
+        codeActivation=this.codeActivation,
+        encoderAlpha=this.encoderAlpha, 
+        decoderAlpha=this.decoderAlpha,
+      } = args;
       let inputShape = [frameSize];
-      let  model = tf.sequential();
+      let model = tf.sequential();
 
-      encoderUnits.forEach((units,i)=> i==0
-        ? model.add(new Snake({units, inputShape}))
-        : model.add(new Snake({units}))
-      );
+      encoderUnits.forEach((units,i)=>{
+        let alpha = typeof encoderAlpha === 'number'
+          ? Math.pow(encoderAlpha, i+1)
+          : encoderAlpha[i];
+        let name = `encoder${i+1}_a${alpha.toFixed(2)}`;
+        let opts = i == 0
+          ? {units, name, alpha, inputShape}
+          : {units, name, alpha, };
+        return model.add(new Snake(opts));
+      });
 
       if (codeActivation === 'snake') {
         model.add(new Snake({
@@ -84,12 +127,28 @@
         }));
       }
 
-      decoderUnits.forEach((units,i)=> i === decoderUnits.length-1
-        ? model.add(new Snake({units: frameSize}))
-        : model.add(new Snake({units})) 
-      );
+      decoderUnits.forEach((units,i)=> {
+        let alpha = typeof decoderAlpha === 'number'
+          ? decoderAlpha * (decoderUnits.length - i)
+          : decoderAlpha[i];
+        let name = `decoder${i+1}_a${alpha.toFixed(2)}`;
+        let opts = i === decoderUnits.length-1
+          ? {units, name, alpha, frameSize}
+          : {units, name, alpha, };
+        return model.add(new Snake(opts));
+      });
+
+      console.trace(`created model`);
 
       return model;
+    }
+
+    async validateSignal(signal, model=this.model) {
+      let { frames } = this.frameSignal(signal);
+      let x = tf.tensor2d(frames);
+      let y = await model.predict(x);
+      let mse = tf.metrics.meanSquaredError(x, y).dataSync();
+      return Signal.stats(mse);
     }
 
     /**
@@ -122,22 +181,26 @@
     }
 
     async train(args={}) {
+      let { model, frameSize, } = this;
       let {
         batchSize = 128,
-        callbacks = {
-          onEpochEnd: AutoEncoder.onEpochEnd,
-        },
-        epochs = 1000,
+        callbacks,
+        epochs = 100,
         frames,
-        loss = tf.losses.meanSquaredError,
+        loss = 'meanSquaredError',
+        logEpoch = this.logEpoch,
         metrics = ['mse'],
         optimizer = tf.train.adam(),
         shuffle = true,
         signal,
-        validationSplit = 0.1,
+        validationSplit = 0,
         verbose = 0,
       } = args;
-      let { model, frameSize, } = this;
+     if (callbacks == null) {
+        callbacks = {
+          onEpochEnd: AutoEncoder.onEpochEnd(logEpoch),
+        }
+      }
       if (signal) {
         assert(!frames, "frames must be omitted if signal is present");
         frames = this.frameSignal(signal).frames;

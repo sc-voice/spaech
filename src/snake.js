@@ -12,7 +12,7 @@
    * Reference: https://github.com/tensorflow/tfjs/blob/master/tfjs-layers/src/activations.ts#L25-L30
    */
   class Activation extends tf.serialization.Serializable {
-    apply(tensor, axis) { throw new Error("abstract method"); }
+    apply(tensor, axis) { throw logger.error('E_ACT_ABSTRACT', "abstract method"); }
     getConfig() { return {}; }
   }
 
@@ -21,23 +21,27 @@
    * Reference: https://arxiv.org/abs/2006.08195
    */
   class SnakeActivation extends Activation {
-    constructor(args) {
+    constructor(args={}) {
       super(args);
+
+      let { alpha=1 } = args;
+      this.alpha = tf.scalar(alpha);
     }
 
     /** @nocollapse */
     static get className() { return 'snakeActivation';}
 
     /**
-     * Calculate the activation function.
+     * Calculate the snake activation function.
      *
      * @param x: Input.
      * @param alpha: Scaling factor 
      * @return Output of the Snake activation.
      */
-    apply(x, alpha = 1) {
+    apply(x, alpha = this.alpha) {
       return tf.tidy(()=>{
-        return tf.add(x, tf.square(tf.sin(x)));
+        let periodic = tf.div(tf.square(tf.sin(tf.mul(alpha,x))), alpha);
+        return tf.add(x, periodic);
       });
     }
   }
@@ -46,15 +50,18 @@
     static className = 'Snake';
     constructor(args) {
       super(args);
-      this.activation = new SnakeActivation();
+      let { alpha=1 } = args || {};
+      this.activation = new SnakeActivation({alpha});
+      this.alpha = alpha;
     }
 
     static get isNode() { return isNode(); }
     static get Activation() { return SnakeActivation; }
 
-    //apply(inputs, kwargs) {
-      //return super.apply(inputs, Object.assign({},kwargs, {alpha:1.2}));
-    //}
+    getConfig() {
+      let { alpha } = this;
+      return Object.assign({ alpha }, super.getConfig());
+    }
 
     call(input, kwargs) {
       let { bias, kernel, activation } = this;
@@ -64,7 +71,8 @@
         let output = tf.dot(input, kernel.read());
         if (bias) {
           if (output.rank >= 3) {
-            throw new Error(`reshapeBias() not implemented for rank:${output.rank}`);
+            throw logger.error('E_SNAKE_CALL', 
+              `reshapeBias() not implemented for rank:${output.rank}`);
           }
           output = tf.add(output, bias.read());
         }

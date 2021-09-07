@@ -24,12 +24,17 @@
 
   it("default ctor", async()=>{
     let coder = new AutoEncoder();
-    should(coder.threshold).equal(2);
-    should(coder.sampleRate).equal(22050);
+    let encoderLayers = 3;
     should(coder.codeSize).equal(96);
     should(coder.dampen).equal(36);
+    should(coder.encoderAlpha).equal(1.61803398875);
+    should(coder.encoderLayers).equal(encoderLayers);
     should(coder.frameSize).equal(192);
+    should(coder.sampleRate).equal(22050);
     should(coder.scale).equal(16384);
+    should(coder.threshold).equal(2);
+    should(coder.encoderUnits.length).equal(encoderLayers);
+    should(coder.decoderUnits.length).equal(encoderLayers);
   });
   it("frameSignal()", async()=>{
     let verbose = 1;
@@ -60,22 +65,25 @@
     });
     should(frames.length).equal(nFrames);
   });
-  it("train()", async()=>{
+  it("train() AN9_20_4_3_WAV", async()=>{
     let frameSize = 96;         // signal compression unit
+    let batchSize = 512;
     let codeSize = 6;           // units in code layer
-    let e0 = frameSize * 0.9;   // first layer number of units
-    let e1 = 0.5;               // layer decay
-    let nLayers = 2;            // encoder/decoder layers
-    let encoderUnits = [ e0, e0*e1, e0*e1*e1, e0*e1*e1*e1, e0*e1*e1*e1*e1, ].slice(0,nLayers);
+    let encoderLayers = 3;      // encoder/decoder layers
+    let encoderUnits = 0.8;     // decay
+    let encoderAlpha = 1.61803398875; // Golden ratio
     let scale = 16384;          // signal normalization
     let codeActivation = 'elu'; // code layer activation function
 
     // Train on one set of sounds from a speaker
-    let coder = new AutoEncoder({frameSize, scale, codeSize, encoderUnits, codeActivation});
-    let epochs = 50;            // more epochs will train better
-    let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
+    let coder = new AutoEncoder({
+      frameSize, scale, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
+    });
+    let epochs = 5;            // more epochs will train better
+    //let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
+    let signal = await wavSignal(AN9_20_4_3_WAV); // longer samples will improve training
     let { splits, frames } = coder.frameSignal(signal);
-    let res = await coder.train({frames, epochs});
+    let res = await coder.train({frames, batchSize, epochs});
 
     // Test using completely different sound from same speaker
     let signalTest = await wavSignal(KATAME_PANCA_WAV);
@@ -93,20 +101,32 @@
     });
     model.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
   });
+  it("coderUnits()", async()=>{
+    let units842 = [8,4,2];
+    should.deepEqual(AutoEncoder.coderUnits(units842), units842);
+    should.deepEqual(AutoEncoder.coderUnits(2), [192,2*192,2*2*192]);
+    should.deepEqual(AutoEncoder.coderUnits(.8, 100, 5 ), [100, 80, 64, 51, 41]);
+    should.deepEqual(AutoEncoder.coderUnits(1, 100, 5 ), [100, 100, 100, 100, 100]);
+  });
   it("getWeights()", async()=>{
     let frameSize = 96;         // signal compression unit
     let codeSize = 6;           // units in code layer
-    let e0 = frameSize * 0.9;   // first layer number of units
-    let e1 = 0.5;               // layer decay
-    let nLayers = 2;            // encoder/decoder layers
-    let encoderUnits = [ e0, e0*e1, e0*e1*e1, e0*e1*e1*e1, e0*e1*e1*e1*e1, ].slice(0,nLayers);
+    let encoderLayers = 3;            // encoder/decoder layers
+    //let encoderAlpha = 0.10;    // snake harmonic alpha. I.e., [0.1, 0.2, 0.3, ...]
+    //encoderAlpha = [.1,.1,.1]; // constant alpha doesn't work as well as harmonic
+    let encoderAlpha = 1.61803398875; // Golden ratio
+    let encoderUnits = 0.7;
     let scale = 16384;          // signal normalization
     let codeActivation = 'elu'; // code layer activation function
-    let coder = new AutoEncoder({frameSize, scale, codeSize, encoderUnits, codeActivation});
+    let coder = new AutoEncoder({
+      frameSize, scale, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
+    });
+    let initialEpoch = 1;       // for continued training
+    let validationSplit = 0.5;  // 
     let epochs = 50;            // more epochs will train better
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
     let { splits, frames } = coder.frameSignal(signal);
-    let res = await coder.train({frames, epochs});
+    let res = await coder.train({frames, epochs, initialEpoch, validationSplit});
 
     let { model } = coder;
     let model2 = coder.createModel();
@@ -130,6 +150,8 @@
       title:`Model2 signals 1:original 2:decoded`,
     });
     model2.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
+    let mse = tf.metrics.meanSquaredError(xtest, ytest);
+    console.log(`mse`, mse.dataSync());
     
   });
 

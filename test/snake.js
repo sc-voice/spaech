@@ -117,7 +117,7 @@
       weights: snake.getWeights(),
     });
   });
-  it("TESTTESTserialize", async()=>{
+  it("serialize", async()=>{
     let nSamp = 192;  
     let groundTruth = [];
     let nExamples = 500;
@@ -130,8 +130,8 @@
 
     const model = tf.sequential();
     let inputShape = [nSamp];
-    model.add(new Snake({units: nSamp, inputShape}));
-    model.add(new Snake({units: nSamp}));
+    model.add(new Snake({units: nSamp, inputShape, alpha:2}));
+    model.add(new Snake({units: nSamp, alpha:1}));
     model.add(tf.layers.dense({units: 1, activation:'elu'}));
 
     model.compile({ optimizer: 'adam', loss: 'meanSquaredError', metrics: ['accuracy'] });
@@ -164,7 +164,6 @@
     // loaded model is same as saved model
     let predict = model.predict(testX).arraySync();
     should.deepEqual(predict2, predict);
-    return;
   });
 
 })

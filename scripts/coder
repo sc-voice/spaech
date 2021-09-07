@@ -25,6 +25,9 @@ DESCRIPTION
         output results in JSON to stdout, highlighting matches if
         output is console.
 
+    -cl, --chart-lines N
+        Number of lines used to chart worst signal mismatch (15)
+
     -cs, --code-size
         Number of units in the bottleneck code layer.
 
@@ -34,9 +37,25 @@ DESCRIPTION
     -ep, --epochs
         Training epochs (100)
 
+    -ie, --initial-epoch EPOCH
+        Initial epoch for continued training
+
+    -le, --log-epoch N
+        Log training stats every every N epochs (10)
+
+    -el, --encoder-layers N
+        Number of encoder/decoder layers (3)
+
     -eu, --encoder-units N1,N2,...,NN
         Number of units in each encoder layer: 
         [frameSize, frameSize, frameSize/2, frameSize/3, frameSize/5]
+
+    -ea, --encoder-alpha A
+    -ea, --encoder-alpha A1,A2,...,AN 
+        Snake activation frequency coefficient. Either a list of alpha
+        coefficients (one for each layer), or a single number. A single
+        alpha number will be used to generate an alpha for each
+        encoder/decoder layer. The default is the Golden Ratio.
 
     -fs, --frame-size
         Audio is encoded/decoded by consecutive frames of given size. (192)
@@ -47,14 +66,19 @@ DESCRIPTION
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
-    -lm, --load-model URL
-        JSON resource URL
+    -mp, --model-path LOCAL_FILE_PATH
+    -mp, --model-path URL
+        JSON resource URL or local file path (test/model/coder)
 
     -sc, --scale SCALE
         Signal normalization (16384)
 
     -sw, --src-wav WAVFILE
         Source WAV file. (${EVAM_ME_SUTTAM_WAV})
+
+    -vs, --validation-signal WAV_FILE
+        Sound file used to validate trained model. Models will only be saved
+        if validation score improves.
 
     -tr, --train  WAVFILE
         Train coder from given WAVFILE
@@ -66,17 +90,25 @@ const TEST_DATA_DIR = path.join(path.dirname(__dirname), 'test/data');
 const EVAM_ME_SUTTAM_WAV = path.join(TEST_DATA_DIR, 'evam-me-suttam.wav');
 const AN9_20_4_3_WAV = path.join(TEST_DATA_DIR, 'an9.20_4.3.wav');
 const argv = process.argv;
+const script = argv[1].split('/').pop();
 
+var chartLines = 15;
 var epochs = 100;
 var scale = 16384;
-var srcWav = EVAM_ME_SUTTAM_WAV;
-var trainWav = null;
+var signalIn = EVAM_ME_SUTTAM_WAV;
+var validationSignalPath;
+var signalOut;
+var trainModel = false;
 var frameSize = 192;
 var codeSize = 6;
 var logLevel = 'info';
 var verbose = false;
-var encoderUnits;
+var encoderLayers = 3;
+var encoderUnits = 0.8;
+var encoderAlpha = 1.61803398875;
 var decoderUnits;
+var initialEpoch;
+var modelPath = 'test/model/coder';
 
 var nargs = process.argv.length;
 if (nargs < 3) {
@@ -87,29 +119,43 @@ for (var i = 2; i < nargs; i++) {
   if (i<2) { continue; }
   if (arg === '-?' || arg === '--help') {
     help();
-  } else if (arg === '-sw' || arg === '--src-wav') {
-    srcWav = argv[++i];
+  } else if (arg === '-si' || arg === '--signal-in') {
+    signalIn = argv[++i];
+  } else if (arg === '-so' || arg === '--signal-out') {
+    signalout = argv[++i];
   } else if (arg === '-du' || arg === '--decoder-units') {
     decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+  } else if (arg === '-ea' || arg === '--encoder-alpha') {
+    encoderAlpha = argv[++i].split(',').map(v=>Number(v));
+    if (encoderAlpha.length === 1) { encoderAlpha = encoderAlpha[0]; }
+  } else if (arg === '-le' || arg === '--log-epoch') {
+    logEpoch = Number(argv[++i]);
+  } else if (arg === '-el' || arg === '--encoder-layers') {
+    encoderLayers = Number(argv[++i]);
   } else if (arg === '-eu' || arg === '--encoder-units') {
     encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-sc' || arg === '--scale') {
     scale = Number(argv[++i]);
   } else if (arg === '-ep' || arg === '--epochs') {
     epochs = Number(argv[++i]);
+  } else if (arg === '-ie' || arg === '--initial-epoch') {
+    initialEpoch = Number(argv[++i]);
+  } else if (arg === '-vs' || arg === '--validateion-signal') {
+    validationSignalPath = argv[++i];
+  } else if (arg === '-mp' || arg === '--model-path') {
+    modelPath = argv[++i];
+  } else if (arg === '-cl' || arg === '--chart-lines') {
+    chartLines = Number(argv[++i]);
   } else if (arg === '-cs' || arg === '--code-size') {
     codeSize = Number(argv[++i]);
   } else if (arg === '-fs' || arg === '--frame-size') {
     frameSize = Number(argv[++i]);
   } else if (arg === '-tr' || arg === '--train') {
-    trainWav = argv[++i];
+    trainModel = true;
   } else if (arg === '-ll' || arg === '--log-level') {
     logLevel = logger.logLevel = argv[++i];
   }
 }
-
-encoderUnits = encoderUnits || [frameSize];
-decoderUnits = decoderUnits || [...encoderUnits].reverse();
 
 async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
   let buf = await fs.promises.readFile(fnam);
@@ -117,55 +163,93 @@ async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
   return new Signal(wf.getSamples(false, Int16Array));
 }
 
+function normalizeUrl(urlOrPath) {
+  if (urlOrPath == null) {
+    throw logger.error('E_MODEL_PATH', `Model url or path is required: -mp PATH`);
+  }
+  if (/^[a-z]*:/.test(urlOrPath)) {
+    return urlOrPath;
+  } 
+
+  var url = path.join(process.cwd(), urlOrPath);
+  return `file:////${url}`;
+}
+
+async function loadModel(modelPath) {
+  let modelUrl = normalizeUrl(modelPath);
+  let coder;
+  let savedModel;
+  if (modelUrl) {
+    try {
+      savedModel = await tf.loadLayersModel(`${modelUrl}/model.json`);
+      logger.info(`loaded model:${modelUrl}`);
+    } catch(e) { 
+      logger.info(`cannot load model:${modelUrl}`);
+    }
+  }
+  if (savedModel) {
+    let { layers } = savedModel;
+    let encoderLayers = Math.floor(layers.length/2);
+    let opts = {
+      encoderLayers,
+      frameSize: layers[0].units,
+      codeSize: layers[Math.ceil(layers.length/2)].units,
+      encoderUnits: layers.slice(0, encoderLayers).map(l=>l.units),
+      encoderAlpha: layers.slice(0, encoderLayers).map(l=>l.alpha),
+      model: savedModel,
+    };
+    coder = new AutoEncoder(opts);
+  }
+  return {
+    modelUrl,
+    savedModel,
+    coder,
+  }
+}
+
 (async function() {
-  logger.debug({
-    codeSize,
-    epochs,
-    frameSize,
-    logLevel,
-    scale,
-    srcWav,
-    trainWav,
-    encoderUnits,
-    decoderUnits,
+  logger.info(script, argv.slice(2).join(' '));
+  let { coder, modelUrl, savedModel } = await loadModel(modelPath);
+  let signal = await wavSignal(signalIn);
+  logger.info(`signal in: ${signal.data.length} samples ${signalIn}`);
 
-  });
-
-  let signal = await wavSignal(srcWav);
-  logger.info(`source WAV file: ${signal.data.length} samples`);
-
-  let coder = new AutoEncoder({
-    frameSize, 
-    scale, 
-    codeSize,
-    encoderUnits,
-    decoderUnits,
-  });
+  coder = coder || new AutoEncoder({ frameSize, scale, codeSize, encoderLayers,
+    encoderUnits, encoderAlpha, decoderUnits, });
   let { model } = coder;
   model.summary();
+  let { splits, frames } = coder.frameSignal(signal);
+  let statsStart = await coder.validateSignal(signal);
 
-  if (trainWav) {
-    let signalTrain = await wavSignal(EVAM_ME_SUTTAM_WAV);
-    let { splits, frames } = coder.frameSignal(signalTrain);
-    let res = await coder.train({frames, epochs});
-
-    let iTest = 32;
-    let signalTest = await wavSignal(srcWav);
-    let { frames:framesTest } = coder.frameSignal(signalTest);
-    let xtest = tf.tensor2d(framesTest.slice(iTest,iTest+1));
-    let { model } = coder;
-    let ytest;
-    let msStart = Date.now();
-    let reps = 100;
-    for (let i = 0; i < reps; i++) {
-      ytest = await model.predict(xtest);
-    }
-    let msElapsed = Date.now() - msStart;
+  // Train
+  let msStart = Date.now();
+  let resTrained = trainModel && (await coder.train({frames, epochs, initialEpoch, logEpoch}));
+  let msElapsed = Date.now() - msStart;
+  logger.debug(`current stats`, statsStart);
+  logger.info(`current mse`, statsStart.avg);
+  var statsTrained;
+  if (resTrained) {
+    statsTrained = await coder.validateSignal(signal);
+    logger.debug(`trained stats`, statsTrained);
+    logger.info(`trained mse:${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
+    let { iMax, max, avg }  = statsTrained;
+    let xtest = tf.tensor2d(frames.slice(iMax,iMax+1));
+    let ytest = await model.predict(xtest);
     let chart = new Chart();
     chart.plot({
       data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
-      title:`Signals 1:original 2:decoded in ${msElapsed/reps}ms`,
-      lines: 4*5+5,
+      title:`Signal[${iMax}] 1:original 2:decoded mse:${avg} mseMax:${max}`,
+      lines: chartLines,
     });
   }
+
+  if (savedModel !== model) {
+      logger.info(`saving new model: ${modelUrl}`);
+      model.save(modelUrl);
+  } else if (statsTrained && statsTrained.avg < statsStart.avg) {
+      logger.info(`saving better model: ${modelUrl}`);
+      model.save(modelUrl);
+  } else {
+    logger.info(`model not saved (mseSaved < mseCurrent)`);
+  }
+
 })();

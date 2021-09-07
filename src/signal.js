@@ -3,8 +3,9 @@
 
   class Signal {
     constructor(data, opts={}) {
+      logger.logInstance(this);
       if (data == null) {
-        throw new Error("Audio data signal array is required");
+        throw this.error('E_SIGNAL_ARRAY', 'Audio data signal array is required');
       }
       this.data = data;
     }
@@ -15,13 +16,13 @@
       } else if (data.constructor.name === 'ArrayBuffer') {
         return new Int16Array(data);
       } else if (data.constructor.name === 'Buffer') {
-        throw new Error(`NodeJS Buffer is not supported`);
+        throw this.error('E_SIG_NODEJS_BUF', `NodeJS Buffer is not supported`);
       } else if (data.buffer && data.buffer.constructor.name === 'ArrayBuffer') {
         return new Int16Array(data);
       } else if (data instanceof Array) {
         return new Int16Array(data);
       } else {
-        throw new Error('cannot convert to Int16Array');
+        throw this.error('E_SIG_INT16', 'cannot convert to Int16Array');
       }
     }
 
@@ -33,17 +34,19 @@
       } else if (data instanceof ArrayBuffer) {
         return new Uint8Array(data)[Symbol.iterator]();
       } else {
-        throw new Error('Expected number iterable or iterator');
+        throw this.error('E_SIG_ITER', 'Expected number iterable or iterator');
       }
     }
 
     static stats(data) {
       let sorted = [...data];
-      let count = sorted.length;
+      let count = data.length;
       sorted.sort((a,b) => a-b); // Default comparator compares strings
-      let min = sorted[0];
-      let max = sorted[count-1];
-      let sum = sorted.reduce((a,n)=>a+n,0);
+      let iMin = 0;
+      let min = data[iMin];
+      let iMax = 0;
+      let max = data[iMax];
+      let sum = data.reduce((a,n)=>a+n,0);
       let avg = sum/count;
       let iHalf = Math.ceil(count/2);
       let median = iHalf == 0
@@ -54,12 +57,32 @@
         );
       let sqDev = 0;
       for (let i=0; i<count; i++) {
-        let dev = sorted[i]-avg;
+        let d = data[i];
+        let dev = d-avg;
         sqDev += dev*dev;
+        if (d < min) {
+          min = d;
+          iMin = i;
+        }
+        if (max < d) {
+          max = d;
+          iMax = i;
+        }
       }
       let stdDev = Math.sqrt(sqDev/count);
 
-      return { count, min, max, sum, avg, median, stdDev}
+      return { 
+        count, 
+        min, 
+        max, 
+        iMin,
+        iMax,
+        sum, 
+        avg, 
+        avg32: Math.fround(avg), 
+        median, 
+        stdDev,
+      }
     }
 
     static rmsErr(a,b) {
