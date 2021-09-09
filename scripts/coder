@@ -21,9 +21,20 @@ SYNOPSIS
         coder [OPTIONS] 
 
 DESCRIPTION
-        Searches bilara-data for root text or translations. Writes
-        output results in JSON to stdout, highlighting matches if
-        output is console.
+        Transform audio signals with an auto-encoder neural net
+        with snake activation layers (https://arxiv.org/pdf/2006.08195.pdf).
+        Auto-encoders are designed to compress their input, so an
+        auto-encoder can be used to compress and/or expand signals.
+        Essentially, the neural net itself has information about all
+        signals from a given source for which the net has been trained.
+        The compressed signal therefore does not need to transmit the
+        information in the neural net and can transfer far less information
+        for any signal from that source. Auto-encoders work best for
+        signals from a single, consistent source. For arbitrary signals
+        from arbitrary sources, they offer no advantage over existing
+        audio compression algorithms such as MP3. However, for signals
+        coming from a single, consistent source, they provide higher
+        compression ratios.
 
     -cl, --chart-lines N
         Number of lines used to chart worst signal mismatch (15)
@@ -73,14 +84,7 @@ DESCRIPTION
     -sc, --scale SCALE
         Signal normalization (16384)
 
-    -sw, --src-wav WAVFILE
-        Source WAV file. (${EVAM_ME_SUTTAM_WAV})
-
-    -vs, --validation-signal WAV_FILE
-        Sound file used to validate trained model. Models will only be saved
-        if validation score improves.
-
-    -tr, --train  WAVFILE
+    -tr, --train  
         Train coder from given WAVFILE
 `);
     process.exit(0);
@@ -92,23 +96,7 @@ const AN9_20_4_3_WAV = path.join(TEST_DATA_DIR, 'an9.20_4.3.wav');
 const argv = process.argv;
 const script = argv[1].split('/').pop();
 
-var chartLines = 15;
-var epochs = 100;
-var scale = 16384;
-var signalIn = EVAM_ME_SUTTAM_WAV;
-var validationSignalPath;
-var signalOut;
-var trainModel = false;
-var frameSize = 192;
-var codeSize = 6;
-var logLevel = 'info';
-var verbose = false;
-var encoderLayers = 3;
-var encoderUnits = 0.8;
-var encoderAlpha = 1.61803398875;
-var decoderUnits;
-var initialEpoch;
-var modelPath = 'test/model/coder';
+var config = {};
 
 var nargs = process.argv.length;
 if (nargs < 3) {
@@ -120,40 +108,38 @@ for (var i = 2; i < nargs; i++) {
   if (arg === '-?' || arg === '--help') {
     help();
   } else if (arg === '-si' || arg === '--signal-in') {
-    signalIn = argv[++i];
+    config.signalIn = argv[++i];
   } else if (arg === '-so' || arg === '--signal-out') {
-    signalout = argv[++i];
+    config.signalOut = argv[++i];
   } else if (arg === '-du' || arg === '--decoder-units') {
-    decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+    config.decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-ea' || arg === '--encoder-alpha') {
-    encoderAlpha = argv[++i].split(',').map(v=>Number(v));
-    if (encoderAlpha.length === 1) { encoderAlpha = encoderAlpha[0]; }
+    config.encoderAlpha = argv[++i].split(',').map(v=>Number(v));
+    if (config.encoderAlpha.length === 1) { config.encoderAlpha = config.encoderAlpha[0]; }
   } else if (arg === '-le' || arg === '--log-epoch') {
-    logEpoch = Number(argv[++i]);
+    config.logEpoch = Number(argv[++i]);
   } else if (arg === '-el' || arg === '--encoder-layers') {
-    encoderLayers = Number(argv[++i]);
+    config.encoderLayers = Number(argv[++i]);
   } else if (arg === '-eu' || arg === '--encoder-units') {
-    encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+    config.encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-sc' || arg === '--scale') {
-    scale = Number(argv[++i]);
+    config.scale = Number(argv[++i]);
   } else if (arg === '-ep' || arg === '--epochs') {
-    epochs = Number(argv[++i]);
+    config.epochs = Number(argv[++i]);
   } else if (arg === '-ie' || arg === '--initial-epoch') {
-    initialEpoch = Number(argv[++i]);
-  } else if (arg === '-vs' || arg === '--validateion-signal') {
-    validationSignalPath = argv[++i];
+    config.initialEpoch = Number(argv[++i]);
   } else if (arg === '-mp' || arg === '--model-path') {
-    modelPath = argv[++i];
+    config.modelPath = argv[++i];
   } else if (arg === '-cl' || arg === '--chart-lines') {
-    chartLines = Number(argv[++i]);
+    config.chartLines = Number(argv[++i]);
   } else if (arg === '-cs' || arg === '--code-size') {
-    codeSize = Number(argv[++i]);
+    config.codeSize = Number(argv[++i]);
   } else if (arg === '-fs' || arg === '--frame-size') {
-    frameSize = Number(argv[++i]);
+    config.frameSize = Number(argv[++i]);
   } else if (arg === '-tr' || arg === '--train') {
-    trainModel = true;
+    config.trainModel = true;
   } else if (arg === '-ll' || arg === '--log-level') {
-    logLevel = logger.logLevel = argv[++i];
+    config.logLevel = logger.logLevel = argv[++i];
   }
 }
 
@@ -175,6 +161,27 @@ function normalizeUrl(urlOrPath) {
   return `file:////${url}`;
 }
 
+function configuration(cfg=config) {
+  return Object.assign({}, {
+    chartLines: 15,
+    epochs: 100,
+    scale: 16384,
+    signalIn: EVAM_ME_SUTTAM_WAV,
+    signalOut: undefined,
+    trainModel: false,
+    frameSize: 192,
+    codeSize: 6,
+    logLevel: 'info',
+    verbose: false,
+    encoderLayers: 3,
+    encoderUnits: 0.8,
+    encoderAlpha: 1.61803398875,
+    decoderUnits: undefined,
+    initialEpoch: 0,
+    modelPath: 'test/model/coder',
+  }, cfg);
+}
+
 async function loadModel(modelPath) {
   let modelUrl = normalizeUrl(modelPath);
   let coder;
@@ -190,14 +197,26 @@ async function loadModel(modelPath) {
   if (savedModel) {
     let { layers } = savedModel;
     let encoderLayers = Math.floor(layers.length/2);
-    let opts = {
-      encoderLayers,
-      frameSize: layers[0].units,
-      codeSize: layers[Math.ceil(layers.length/2)].units,
-      encoderUnits: layers.slice(0, encoderLayers).map(l=>l.units),
-      encoderAlpha: layers.slice(0, encoderLayers).map(l=>l.alpha),
-      model: savedModel,
-    };
+    let frameSize = layers[0].units;
+    let { encoderUnits, encoderAlpha, } = layers.slice(0, encoderLayers).map(l=>({
+      encoderUnits: l.units,
+      encoderAlpha: l.alpha,
+    }));
+    let codeSize = layers[encoderLayers].units;
+    let model = savedModel;
+    let opts = {encoderLayers, frameSize, codeSize, encoderUnits, encoderAlpha, model };
+    let cfg = configuration(config);
+    ['encoderLayers', 'frameSize', 'codeSize'].forEach(key=>{
+      let val = opts[key];
+      if (val !== null && cfg[key] !== val) {
+        throw logger.error('E_CODER_CFG', 
+          `Delete existing model to change configuration`,
+          `(${key}:${val} vs. ${cfg[key]})`,
+        );
+      } else {
+        logger.info(`savedModel ${key}:${val} (OK)`);
+      }
+    });
     coder = new AutoEncoder(opts);
   }
   return {
@@ -207,49 +226,69 @@ async function loadModel(modelPath) {
   }
 }
 
+async function chartWorst({model, frames, stats, chartLines}) {
+  let { iMax, max, avg }  = stats;
+  let xtest = tf.tensor2d(frames.slice(iMax,iMax+1));
+  let ytest = await model.predict(xtest);
+  let chart = new Chart();
+  chart.plot({
+    data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
+    title:`Signal[${iMax}] 1:original 2:decoded mse:${avg} mseMax:${max}`,
+    lines: chartLines,
+  });
+}
+
 (async function() {
+  let cfg = configuration(config);
+  let { 
+    modelPath, 
+    trainModel, 
+    signalIn, 
+    epochs, 
+    initialEpoch, 
+    logEpoch, 
+    chartLines,
+  } = cfg;
   logger.info(script, argv.slice(2).join(' '));
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
   let signal = await wavSignal(signalIn);
   logger.info(`signal in: ${signal.data.length} samples ${signalIn}`);
 
-  coder = coder || new AutoEncoder({ frameSize, scale, codeSize, encoderLayers,
-    encoderUnits, encoderAlpha, decoderUnits, });
+  if (coder == null) {
+    logger.info(`creating AutoEncder`, cfg);
+    coder = new AutoEncoder(cfg);
+  }
   let { model } = coder;
   model.summary();
   let { splits, frames } = coder.frameSignal(signal);
-  let statsStart = await coder.validateSignal(signal);
+  let statsSignal = await coder.validateSignal(signal);
 
   // Train
   let msStart = Date.now();
   let resTrained = trainModel && (await coder.train({frames, epochs, initialEpoch, logEpoch}));
   let msElapsed = Date.now() - msStart;
-  logger.debug(`current stats`, statsStart);
-  logger.info(`current mse`, statsStart.avg);
+  logger.debug(`current stats`, statsSignal);
+  logger.info(`current mse`, statsSignal.avg);
   var statsTrained;
   if (resTrained) {
     statsTrained = await coder.validateSignal(signal);
     logger.debug(`trained stats`, statsTrained);
     logger.info(`trained mse:${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
-    let { iMax, max, avg }  = statsTrained;
-    let xtest = tf.tensor2d(frames.slice(iMax,iMax+1));
-    let ytest = await model.predict(xtest);
-    let chart = new Chart();
-    chart.plot({
-      data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
-      title:`Signal[${iMax}] 1:original 2:decoded mse:${avg} mseMax:${max}`,
-      lines: chartLines,
-    });
+    await chartWorst({model, frames, stats:statsTrained, chartLines});
+  } else {
+    await chartWorst({model, frames, stats:statsSignal, chartLines});
   }
 
   if (savedModel !== model) {
-      logger.info(`saving new model: ${modelUrl}`);
-      model.save(modelUrl);
-  } else if (statsTrained && statsTrained.avg < statsStart.avg) {
-      logger.info(`saving better model: ${modelUrl}`);
-      model.save(modelUrl);
+    logger.info(`saving new model: ${modelUrl}`);
+    model.save(modelUrl);
+  } else if (statsTrained && statsTrained.avg < statsSignal.avg) {
+    logger.info(`saving better model: ${modelUrl}`);
+    model.save(modelUrl);
+  } else if (resTrained) {
+    logger.info(`trained model not saved (mseSaved <= mseCurrent)`);
   } else {
-    logger.info(`model not saved (mseSaved < mseCurrent)`);
+    logger.info(`model is unchanged`);
   }
 
 })();
