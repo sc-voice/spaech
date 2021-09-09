@@ -32,7 +32,7 @@
     let sig = new Signal(a);
     should.deepEqual(sig.rmsErr(b), Signal.rmsErr(a,b));
   });
-  it("TESTTESTstats() => stats", async()=>{
+  it("stats() => stats", async()=>{
     let dataOdd = [1, 2, 3, 5, 4];
     should.deepEqual(Signal.stats(dataOdd), {
       count: 5,
@@ -135,7 +135,7 @@
     should.deepEqual(splitBlocks[2], {start: 326, length: 212});  // suttaṁ
     should(splitBlocks.length).equal(3);
   });
-  it("TESTTESTWAV files", async()=>{
+  it("WAV files", async()=>{
     let verbose = 1;
     let buf = await fs.promises.readFile(AN9_20_4_3);
     let wf = new WaveFile(buf);
@@ -181,7 +181,7 @@
     should(samples.constructor.name).equal('Int16Array');
     should(samples.length).equal(2626031);
   });
-  it("TESTTESTstats(AN9_20_4_3) => iterators are slower than loops", async()=>{
+  it("stats(AN9_20_4_3) => iterators are slower than loops", async()=>{
     let buf = await fs.promises.readFile(AN9_20_4_3);
     let wf = new WaveFile(buf);
     let samples = wf.getSamples(false, Int16Array);

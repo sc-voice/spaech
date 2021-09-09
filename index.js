@@ -3,6 +3,7 @@ module.exports = {
   Chart: require('./src/chart'),
   Signal: require('./src/signal'),
   Snake: require('./src/snake'),
+  WordWindow: require('./src/word-window'),
 
 '' : ''};
 
