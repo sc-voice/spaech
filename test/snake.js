@@ -118,6 +118,8 @@
     });
   });
   it("serialize", async()=>{
+    let REGENERATE_TEST_DATA = 0;
+    if (!REGENERATE_TEST_DATA) { return; }
     let nSamp = 192;  
     let groundTruth = [];
     let nExamples = 500;

@@ -71,7 +71,7 @@
       return (epoch, log)=>{
         if (logEpoch && (epoch % logEpoch === 9)) {
           let { val_mse, mse } = log;
-          console.log(`Epoch${epoch}: `, JSON.stringify({val_mse, mse}));
+          logger.info(`Epoch${epoch}: `, JSON.stringify({val_mse, mse}));
         }
       }
     }
@@ -137,8 +137,6 @@
           : {units, name, alpha, };
         return model.add(new Snake(opts));
       });
-
-      console.trace(`created model`);
 
       return model;
     }
