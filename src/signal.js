@@ -1,5 +1,7 @@
 (function(exports) {
   const { logger } = require('log-instance');
+  const { WaveFile } = require('wavefile');
+  const assert = require('assert');
 
   class Signal {
     constructor(data, opts={}) {
@@ -8,6 +10,12 @@
         throw this.error('E_SIGNAL_ARRAY', 'Audio data signal array is required');
       }
       this.data = data;
+    }
+
+    static fromWav(buf) {
+      let wf = new WaveFile(buf);
+      let data = wf.getSamples(false, Int16Array);
+      return new Signal(data);
     }
 
     static toInt16Array(data) {
@@ -99,6 +107,18 @@
       }
 
       return n ? Math.sqrt(sum / n) : 0;
+    }
+
+    toWav(args={}) {
+      let {
+        numChannels = 1,
+        sampleRate = 22050,
+        bitDepth = '16',
+      } = args;
+      let wav = new WaveFile();
+      let { data:samples } = this;
+      wav.fromScratch(numChannels, sampleRate, bitDepth, samples);
+      return wav.toBuffer();
     }
 
     stats() {

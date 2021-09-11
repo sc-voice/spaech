@@ -12,14 +12,14 @@
   this.timeout(120*1000);
 
   const EVAM_ME_SUTTAM_WAV = path.join(__dirname, 'data/evam-me-suttam.wav');
+  const EVAM_ME_SUTTAM_IDENTITY_WAV = path.join(__dirname, 'data/evam-me-suttam-identity.wav');
   const KATAME_PANCA_WAV = path.join(__dirname, 'data/katame-panca.wav');
   const EVAM_ME_SUTTAM_TXT = path.join(__dirname, 'data/evam-me-suttam.txt');
   const AN9_20_4_3_WAV = path.join(__dirname, 'data/an9.20_4.3.wav');
 
   async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
     let buf = await fs.promises.readFile(fnam);
-    let wf = new WaveFile(buf);
-    return new Signal(wf.getSamples(false, Int16Array));
+    return Signal.fromWav(buf);
   }
 
   it("default ctor", async()=>{
@@ -57,7 +57,7 @@
       encoderLayers,
     });
   });
-  it("TESTTESTframeSignal()", async()=>{
+  it("frameSignal()", async()=>{
     let verbose = 1;
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 10;
@@ -85,6 +85,24 @@
       iFrame += split.nFrames;
     });
     should(frames.length).equal(nFrames);
+  });
+  it("TESTTESTtransform(...)", async()=>{
+    let verbose = 1;
+    let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
+    let scale;
+    let frameSize;
+    let threshold = 2;
+    let dampen = 36;
+    let coder = new AutoEncoder({frameSize, scale});
+    let transform = 'identity';
+    let sigOut = await coder.transform(sigIn, {scale, transform});
+    let splits = sigIn.split({threshold, dampen});
+    for (let i = 0; i < splits.length; i++) {
+      let {start,length} = splits[i];
+      let end = start+length;
+      should.deepEqual(sigIn.data.slice(start,end), sigOut.data.slice(start,end));
+    }
+    await fs.writeFileSync(EVAM_ME_SUTTAM_IDENTITY_WAV, sigOut.toWav());
   });
   it("train() AN9_20_4_3_WAV", async()=>{
     let frameSize = 96;         // signal compression unit

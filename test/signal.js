@@ -10,6 +10,7 @@
   this.timeout(10*1000);
 
   const EVAM_ME_SUTTAM = path.join(__dirname, 'data/evam-me-suttam.wav');
+  const EVAM_ME_SUTTAM_COPY = path.join(__dirname, 'data/evam-me-suttam-copy.wav');
   const AN9_20_4_3 = path.join(__dirname, 'data/an9.20_4.3.wav');
 
   it("default ctor", ()=>{
@@ -104,18 +105,26 @@
     should.deepEqual([...new Uint8Array(data.buffer)], [255,0,1]);
     should.deepEqual([...Signal.toIterator(data.buffer)], [255,0,1]);
   });
+  it("toWav()", async()=>{
+    let buf = await fs.promises.readFile(EVAM_ME_SUTTAM);
+    let sig = Signal.fromWav(buf);
+    let wav = sig.toWav();
+    // WaveFile and ffmpeg generate different WAV files, so we
+    // compare with the ffmpeg copy of the WaveFile WAV buffer
+    let bufCopy = await fs.promises.readFile(EVAM_ME_SUTTAM_COPY);
+    should.deepEqual([...wav], [...bufCopy]);
+  });
   it("WAV split EVAM_ME_SUTTAM audio", async()=>{
     let verbose = 0;
     let buf = await fs.promises.readFile(EVAM_ME_SUTTAM);
-    let wf = new WaveFile(buf);
-    let s16 = wf.getSamples(false, Int16Array);
+    let sig = await Signal.fromWav(buf);
     let msStart = Date.now();
-    let sig = new Signal(s16);
+    let { data } = sig;
     let threshold = 2;  // generated speech is very quiet
     let dampen = 36;    // ~1ms includes unvoiced consonants (e.g., sutaṁ)
     let splits = sig.split({threshold, dampen});
     1 && console.log(`splits[${splits.length}]`, JSON.stringify(splits.slice(0,10)));
-    0 && console.log('zeros', s16.slice(0, splits[0].start).join(','));
+    0 && console.log('zeros', data.slice(0, splits[0].start).join(','));
     should.deepEqual(splits[0], {start: 1293, length: 12855});  // evaṁ
     should.deepEqual(splits[1], {start: 18096, length: 9220});  // me
     should.deepEqual(splits[2], {start: 31361, length: 20251});  // suttaṁ
@@ -138,10 +147,9 @@
   it("WAV files", async()=>{
     let verbose = 1;
     let buf = await fs.promises.readFile(AN9_20_4_3);
-    let wf = new WaveFile(buf);
-    let s16 = wf.getSamples(false, Int16Array);
+    let sig = await Signal.fromWav(buf);
+    let { data:s16 } = sig;
     let msStart = Date.now();
-    let sig = new Signal(s16);
     let stats = sig.stats();
     verbose && console.log(`AN9_20_4_3 stats in ${Date.now()-msStart}ms`);
     should(s16.length).equal(2626031);
@@ -229,10 +237,9 @@
   it("WAV split AN9_20_4_3 audio", async()=>{
     let verbose = 1;
     let buf = await fs.promises.readFile(AN9_20_4_3);
-    let wf = new WaveFile(buf);
-    let s16 = wf.getSamples(false, Int16Array);
+    let sig = Signal.fromWav(buf);
+    let { data: s16 } = sig;
     let msStart = Date.now();
-    let sig = new Signal(s16);
     let threshold = 2;  // generated speech is very quiet
     let dampen = 36;    // ~1.6ms distinguishes unvoiced consonants from words
     let splits = sig.split({threshold, dampen});

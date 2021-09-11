@@ -224,6 +224,36 @@
       return {splits, frames};
     }
 
+    transform(signal, opts={}) {
+      let { frameSize, model } = this;
+      let { 
+        threshold = 2,  // minimum signal that starts word
+        dampen = 36,    // minium number of samples at or above threshold 
+        scale = 16384,  // normalization to interval [0,1]
+        transform = 'model',
+      } = opts;
+      let splits = signal.split({threshold, dampen});
+      let { data: dataIn } = signal;
+      let dataOut = new Int16Array(dataIn.length);
+      let predict = transform === 'model' ? x=>model.predict(x) : x=>x;
+
+      splits.forEach((split,i)=>{
+        let { start, length } = split;
+        let nFrames = Math.ceil(length/frameSize);
+        let end = start + nFrames*frameSize;
+        for (let iFrame = start; iFrame < end; iFrame+=frameSize) {
+          let frameIn = dataIn.subarray(iFrame,iFrame+frameSize);
+          let x = tf.tensor2d([[...frameIn]]);
+          let y = predict(x).dataSync().map(v=>Math.round(v));
+          let frameOut = y;
+          dataOut.set(frameOut, iFrame);
+        }
+      });
+    
+      return new Signal(dataOut);
+    }
+
+
     async train(args={}) {
       let { model, frameSize, } = this;
       let {
