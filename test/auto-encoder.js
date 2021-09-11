@@ -25,24 +25,45 @@
   it("default ctor", async()=>{
     let coder = new AutoEncoder();
     let encoderLayers = 3;
-    should(coder.codeSize).equal(96);
-    should(coder.dampen).equal(36);
     should(coder.encoderAlpha).equal(1.61803398875);
     should(coder.encoderLayers).equal(encoderLayers);
     should(coder.frameSize).equal(192);
-    should(coder.sampleRate).equal(22050);
-    should(coder.scale).equal(16384);
-    should(coder.threshold).equal(2);
     should(coder.encoderUnits.length).equal(encoderLayers);
     should(coder.decoderUnits.length).equal(encoderLayers);
   });
-  it("frameSignal()", async()=>{
+  it("modelConfiguration", async()=>{
+    let frameSize = 96;
+    let codeSize = 6;
+    let encoderLayers = 3;
+    let alpha = 1.61803398875;  // Golden Ratio
+    let alpha2 = alpha*alpha;
+    let alpha3 = alpha*alpha*alpha;
+    let encoderAlpha = alpha;
+    let encoderUnits = 0.7;
+    let codeActivation = 'elu'; // code layer activation function
+    let coder = new AutoEncoder({
+      frameSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
+    });
+    let { model } = coder;
+    let config = AutoEncoder.modelConfiguration(coder.model);
+    should.deepEqual(config, {
+      codeSize,
+      codeActivation,
+      frameSize,
+      encoderUnits: [ 96, 67, 47],
+      decoderUnits: [ 96, 67, 47].reverse(),
+      encoderAlpha: [ alpha, alpha2, alpha3],
+      decoderAlpha: [ alpha3, alpha2, alpha],
+      encoderLayers,
+    });
+  });
+  it("TESTTESTframeSignal()", async()=>{
     let verbose = 1;
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 10;
     let frameSize = 10;
     let coder = new AutoEncoder({frameSize, scale});
-    let { splits, frames } = await coder.frameSignal(signal);
+    let { splits, frames } = await coder.frameSignal(signal, {scale});
 
     should.deepEqual(splits, [
       { start:  1293, length: 12855, nFrames: 1286, end: 14153 }, // evam

@@ -84,6 +84,9 @@ DESCRIPTION
     -sc, --scale SCALE
         Signal normalization (16384)
 
+    -ta, --train-attempts N
+        Train code with up to N attempts to save a better model (1)
+
     -tr, --train  
         Train coder from given WAVFILE
 `);
@@ -96,7 +99,7 @@ const AN9_20_4_3_WAV = path.join(TEST_DATA_DIR, 'an9.20_4.3.wav');
 const argv = process.argv;
 const script = argv[1].split('/').pop();
 
-var config = {};
+var cmdCfg = {};
 
 var nargs = process.argv.length;
 if (nargs < 3) {
@@ -108,38 +111,40 @@ for (var i = 2; i < nargs; i++) {
   if (arg === '-?' || arg === '--help') {
     help();
   } else if (arg === '-si' || arg === '--signal-in') {
-    config.signalIn = argv[++i];
+    cmdCfg.signalIn = argv[++i];
   } else if (arg === '-so' || arg === '--signal-out') {
-    config.signalOut = argv[++i];
+    cmdCfg.signalOut = argv[++i];
   } else if (arg === '-du' || arg === '--decoder-units') {
-    config.decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+    cmdCfg.decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-ea' || arg === '--encoder-alpha') {
-    config.encoderAlpha = argv[++i].split(',').map(v=>Number(v));
-    if (config.encoderAlpha.length === 1) { config.encoderAlpha = config.encoderAlpha[0]; }
+    cmdCfg.encoderAlpha = argv[++i].split(',').map(v=>Number(v));
+    if (cmdCfg.encoderAlpha.length === 1) { cmdCfg.encoderAlpha = cmdCfg.encoderAlpha[0]; }
   } else if (arg === '-le' || arg === '--log-epoch') {
-    config.logEpoch = Number(argv[++i]);
+    cmdCfg.logEpoch = Number(argv[++i]);
   } else if (arg === '-el' || arg === '--encoder-layers') {
-    config.encoderLayers = Number(argv[++i]);
+    cmdCfg.encoderLayers = Number(argv[++i]);
   } else if (arg === '-eu' || arg === '--encoder-units') {
-    config.encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+    cmdCfg.encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-sc' || arg === '--scale') {
-    config.scale = Number(argv[++i]);
+    cmdCfg.scale = Number(argv[++i]);
   } else if (arg === '-ep' || arg === '--epochs') {
-    config.epochs = Number(argv[++i]);
+    cmdCfg.epochs = Number(argv[++i]);
   } else if (arg === '-ie' || arg === '--initial-epoch') {
-    config.initialEpoch = Number(argv[++i]);
+    cmdCfg.initialEpoch = Number(argv[++i]);
   } else if (arg === '-mp' || arg === '--model-path') {
-    config.modelPath = argv[++i];
+    cmdCfg.modelPath = argv[++i];
   } else if (arg === '-cl' || arg === '--chart-lines') {
-    config.chartLines = Number(argv[++i]);
+    cmdCfg.chartLines = Number(argv[++i]);
+  } else if (arg === '-ta' || arg === '--train-attempts') {
+    cmdCfg.trainAttempts = Number(argv[++i]);
   } else if (arg === '-cs' || arg === '--code-size') {
-    config.codeSize = Number(argv[++i]);
+    cmdCfg.codeSize = Number(argv[++i]);
   } else if (arg === '-fs' || arg === '--frame-size') {
-    config.frameSize = Number(argv[++i]);
+    cmdCfg.frameSize = Number(argv[++i]);
   } else if (arg === '-tr' || arg === '--train') {
-    config.trainModel = true;
+    cmdCfg.trainModel = true;
   } else if (arg === '-ll' || arg === '--log-level') {
-    config.logLevel = logger.logLevel = argv[++i];
+    cmdCfg.logLevel = logger.logLevel = argv[++i];
   }
 }
 
@@ -161,7 +166,7 @@ function normalizeUrl(urlOrPath) {
   return `file:////${url}`;
 }
 
-function configuration(cfg=config) {
+function configuration(cfg=cmdCfg) {
   return Object.assign({}, {
     chartLines: 15,
     epochs: 100,
@@ -178,6 +183,7 @@ function configuration(cfg=config) {
     encoderAlpha: 1.61803398875,
     decoderUnits: undefined,
     initialEpoch: 0,
+    trainAttempts: 1,
     modelPath: 'test/model/coder',
   }, cfg);
 }
@@ -195,29 +201,18 @@ async function loadModel(modelPath) {
     }
   }
   if (savedModel) {
-    let { layers } = savedModel;
-    let encoderLayers = Math.floor(layers.length/2);
-    let frameSize = layers[0].units;
-    let { encoderUnits, encoderAlpha, } = layers.slice(0, encoderLayers).map(l=>({
-      encoderUnits: l.units,
-      encoderAlpha: l.alpha,
-    }));
-    let codeSize = layers[encoderLayers].units;
-    let model = savedModel;
-    let opts = {encoderLayers, frameSize, codeSize, encoderUnits, encoderAlpha, model };
-    let cfg = configuration(config);
-    ['encoderLayers', 'frameSize', 'codeSize'].forEach(key=>{
-      let val = opts[key];
-      if (val !== null && cfg[key] !== val) {
-        throw logger.error('E_CODER_CFG', 
-          `Delete existing model to change configuration`,
-          `(${key}:${val} vs. ${cfg[key]})`,
-        );
-      } else {
-        logger.info(`savedModel ${key}:${val} (OK)`);
+    let savedCfg = AutoEncoder.modelConfiguration(savedModel);
+    Object.keys(savedCfg).forEach(key=>{
+      if (cmdCfg.hasOwnProperty(key)) {
+        let savedVal = savedCfg[key];
+        let cmdVal = cmdCfg[key];
+        if (savedVal !== cmdCfg[key]) {
+          logger.info(`savedModel.${key}:${savedVal} overrides command option: ${cmdVal}`);
+        }
       }
     });
-    coder = new AutoEncoder(opts);
+    savedCfg.model = savedModel;
+    coder = new AutoEncoder(savedCfg);
   }
   return {
     modelUrl,
@@ -233,13 +228,13 @@ async function chartWorst({model, frames, stats, chartLines}) {
   let chart = new Chart();
   chart.plot({
     data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
-    title:`Signal[${iMax}] 1:original 2:decoded mse:${avg} mseMax:${max}`,
+    title:`Worst frame:${iMax} mse:${max} mseAvg:${avg} 1:expected 2:actual`,
     lines: chartLines,
   });
 }
 
 (async function() {
-  let cfg = configuration(config);
+  let cfg = configuration(cmdCfg);
   let { 
     modelPath, 
     trainModel, 
@@ -248,6 +243,7 @@ async function chartWorst({model, frames, stats, chartLines}) {
     initialEpoch, 
     logEpoch, 
     chartLines,
+    trainAttempts,
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
@@ -255,7 +251,7 @@ async function chartWorst({model, frames, stats, chartLines}) {
   logger.info(`signal in: ${signal.data.length} samples ${signalIn}`);
 
   if (coder == null) {
-    logger.info(`creating AutoEncder`, cfg);
+    logger.info(`creating AutoEncoder`, cfg);
     coder = new AutoEncoder(cfg);
   }
   let { model } = coder;
@@ -264,31 +260,37 @@ async function chartWorst({model, frames, stats, chartLines}) {
   let statsSignal = await coder.validateSignal(signal);
 
   // Train
-  let msStart = Date.now();
-  let resTrained = trainModel && (await coder.train({frames, epochs, initialEpoch, logEpoch}));
-  let msElapsed = Date.now() - msStart;
-  logger.debug(`current stats`, statsSignal);
-  logger.info(`current mse`, statsSignal.avg);
-  var statsTrained;
-  if (resTrained) {
-    statsTrained = await coder.validateSignal(signal);
-    logger.debug(`trained stats`, statsTrained);
-    logger.info(`trained mse:${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
-    await chartWorst({model, frames, stats:statsTrained, chartLines});
+  if (trainModel) {
+    let save = 0;
+    for (let iTrain=1; !save && iTrain <= trainAttempts; iTrain++) {
+      logger.info(`training model (attempt #${iTrain}/${trainAttempts})...`);
+      let msStart = Date.now();
+      let resTrained = trainModel && (await coder.train({frames, epochs, initialEpoch, logEpoch}));
+      let msElapsed = Date.now() - msStart;
+      var statsTrained = await coder.validateSignal(signal);
+      logger.debug(`trained stats`, statsTrained);
+      await chartWorst({model, frames, stats:statsTrained, chartLines});
+      logger.debug(`current stats`, statsSignal);
+      logger.info(`current mse:`, statsSignal.avg);
+      logger.info(`trained mse: ${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
+      if (savedModel !== model) {
+        logger.info(`saving new model#${iTrain} => ${modelUrl}`);
+        save = iTrain;
+      } else if (statsTrained && statsTrained.avg < statsSignal.avg) {
+        logger.info(`saving better model#${iTrain} => ${modelUrl}`);
+        save = iTrain;
+      } else {
+        logger.info(`trained model not saved (mseSaved <= mseCurrent)`);
+      } 
+    }
+    if (save) {
+      model.save(modelUrl);
+    } else {
+      logger.info(`Could not train better model after ${trainAttempts} attempts`);
+    }
   } else {
+    logger.info(`no changes made to trained model`);
     await chartWorst({model, frames, stats:statsSignal, chartLines});
-  }
-
-  if (savedModel !== model) {
-    logger.info(`saving new model: ${modelUrl}`);
-    model.save(modelUrl);
-  } else if (statsTrained && statsTrained.avg < statsSignal.avg) {
-    logger.info(`saving better model: ${modelUrl}`);
-    model.save(modelUrl);
-  } else if (resTrained) {
-    logger.info(`trained model not saved (mseSaved <= mseCurrent)`);
-  } else {
-    logger.info(`model is unchanged`);
   }
 
 })();

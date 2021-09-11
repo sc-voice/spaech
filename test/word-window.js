@@ -11,14 +11,14 @@
   const EVAM_ME_SUTTAM = path.join(__dirname, 'data/evam-me-suttam.wav');
   const AN9_20_4_3 = path.join(__dirname, 'data/an9.20_4.3.wav');
 
-  it("TESTTESTdefault ctor", ()=>{
+  it("default ctor", ()=>{
     let tw = new WordWindow();
     should.deepEqual(tw.window, [0.5,1,0.5]); // Normalized binomial coefficient
     should.deepEqual(tw.alphabet, ' est'.split(''));
     should(tw.alphaMap).properties({ ' ':0, e: 1, s: 2, t: 3, });
     should(tw.windowPeak).equal(1);
   });
-  it("TESTTESTcustom ctor", ()=>{
+  it("custom ctor", ()=>{
     let alphabet = 'xyz';
     let text = 'xyzx';
     let n = 1+4+6+4+1;
@@ -37,10 +37,10 @@
     should.deepEqual(tw.alphabet, ' xyz'.split(''));
     should(tw.alphaMap).properties({ ' ': 0, x: 1, y: 2, z: 3, });
   });
-  it("TESTTESTalphabetOf(text)", ()=>{
+  it("alphabetOf(text)", ()=>{
     should.deepEqual(WordWindow.alphabetOf('xy zy xx'), ' xyz'.split(''));
   });
-  it("TESTTESTfactorial(x) => x!", ()=>{
+  it("factorial(x) => x!", ()=>{
     should(WordWindow.factorial(0)).equal(1);
     should(WordWindow.factorial(1)).equal(1);
     should(WordWindow.factorial(2)).equal(2);
@@ -51,7 +51,7 @@
     should(WordWindow.factorial(7)).equal(5040);
     should(WordWindow.factorial(8)).equal(40320);
   });
-  it("TESTTESTbinomialWindow(...)", ()=>{
+  it("binomialWindow(...)", ()=>{
     should.deepEqual(WordWindow.binomialWindow({width:3}), [0.5, 1, 0.5]);
     should.deepEqual(WordWindow.binomialWindow({width:3,range:'max1'}), [0.5, 1, 0.5]);
     should.deepEqual(WordWindow.binomialWindow({width:3,range:'sum1'}), [0.25, 0.5, 0.25]);

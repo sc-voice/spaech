@@ -102,11 +102,14 @@
         let outRow = output.map(ds=>ds.slice(i, i+lineLength));
         this.plotRow({output:outRow, min, max, range});
       }
-      title && console.log(title, JSON.stringify({
-        min: min.toFixed(Math.max(5, precision)),
-        max: max.toFixed(Math.max(5, precision)), 
-        xInterval,
-      }));
+      if (title) {
+        console.log(title);
+        console.log(`chart:`, {
+          min: Number(min.toFixed(Math.max(5, precision))),
+          max: Number(max.toFixed(Math.max(5, precision))),
+          xInterval,
+        });
+      }
     }
 
   }

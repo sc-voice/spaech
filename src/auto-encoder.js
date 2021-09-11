@@ -17,11 +17,6 @@
         frameSize = FRAME_SIZE,
         codeActivation = 'snake',
         codeSize = 96,
-        scale = 16384,
-        sampleRate = 22050,
-        threshold = 2,
-        dampen = 36,
-        logEpoch = 10,
         encoderUnits=0.8,
         encoderLayers=N_LAYERS,
         encoderAlpha=1.61803398875, // Golden Ratio is least resonant
@@ -39,7 +34,6 @@
         ? encoderAlpha 
         : [...encoderAlpha].reverse());
       Object.assign(this, {
-        scale, threshold, dampen, sampleRate, logEpoch,
         frameSize, codeSize, codeActivation,
         encoderUnits, decoderUnits,
         encoderAlpha, decoderAlpha,
@@ -49,6 +43,52 @@
         writable: true,
         value: model,
       });
+    }
+
+    static modelConfiguration(model) {
+      let { layers } = model;
+      let frameSize;
+      let encoderUnits = [];
+      let encoderAlpha = [];
+      let decoderAlpha = [];
+      let decoderUnits = [];
+      let codeSize;
+      let codeActivation;
+      layers.forEach((layer,i)=> {
+        let { units, alpha } = layer;
+        let activation = layer.activation.constructor.name
+          .toLowerCase()
+          .replace(/activation/,'');
+        if (i === 0) {
+          frameSize = units;
+          encoderUnits.push(units);
+          encoderAlpha.push(alpha);
+        } else if (units < layers[i-1].units) {
+          if (units < layers[i+1].units) {
+            codeSize = units;
+            codeActivation = activation;
+          } else {
+            encoderUnits.push(units);
+            encoderAlpha.push(alpha);
+          }
+        } else if (units > layers[i-1].units) {
+          decoderUnits.push(units);
+          decoderAlpha.push(alpha);
+        }
+      });
+
+      return {
+        //threshold = 2,
+        codeActivation,
+        codeSize, 
+        decoderAlpha,
+        decoderUnits,
+        encoderAlpha, 
+        encoderLayers: encoderUnits.length, 
+        encoderUnits, 
+        frameSize, 
+
+      };
     }
 
     static coderUnits(units, frameSize=FRAME_SIZE, nLayers=N_LAYERS) {
@@ -129,7 +169,7 @@
 
       decoderUnits.forEach((units,i)=> {
         let alpha = typeof decoderAlpha === 'number'
-          ? decoderAlpha * (decoderUnits.length - i)
+          ? Math.pow(decoderAlpha, decoderUnits.length-i)
           : decoderAlpha[i];
         let name = `decoder${i+1}_a${alpha.toFixed(2)}`;
         let opts = i === decoderUnits.length-1
@@ -141,8 +181,9 @@
       return model;
     }
 
-    async validateSignal(signal, model=this.model) {
-      let { frames } = this.frameSignal(signal);
+    async validateSignal(signal, opts={}) {
+      let { model=this.model, } = opts;
+      let { frames } = this.frameSignal(signal, opts);
       let x = tf.tensor2d(frames);
       let y = await model.predict(x);
       let mse = tf.metrics.meanSquaredError(x, y).dataSync();
@@ -153,7 +194,12 @@
      * Scale signal and split it up into frames for each detected word.
      */
     frameSignal(signal, opts={}) {
-      let { frameSize, scale, threshold, dampen } = this;
+      let { frameSize, } = this;
+      let { 
+        threshold = 2,  // minimum signal that starts word
+        dampen = 36,    // minium number of samples at or above threshold 
+        scale = 16384,  // normalization to interval [0,1]
+      } = opts;
       assert(signal instanceof Signal, 'signal must be a Signal');
 
       // detect words
@@ -186,7 +232,7 @@
         epochs = 100,
         frames,
         loss = 'meanSquaredError',
-        logEpoch = this.logEpoch,
+        logEpoch = 10,
         metrics = ['mse'],
         optimizer = tf.train.adam(),
         shuffle = true,
