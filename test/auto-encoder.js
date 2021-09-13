@@ -31,6 +31,13 @@
     should(coder.encoderUnits.length).equal(encoderLayers);
     should(coder.decoderUnits.length).equal(encoderLayers);
   });
+  it("Int16Array", ()=>{
+    let i16a = new Int16Array([1,10,100]);
+
+    // map preserves data type
+    should.deepEqual(i16a.map(v=>v/10), new Int16Array([0,1,10]));
+    should.deepEqual([...i16a].map(v=>v/10), [0.1,1,10]);
+  });
   it("modelConfiguration", async()=>{
     let frameSize = 96;
     let codeSize = 6;
@@ -60,7 +67,7 @@
   it("frameSignal()", async()=>{
     let verbose = 1;
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
-    let scale = 10;
+    let scale = 16384;
     let frameSize = 10;
     let coder = new AutoEncoder({frameSize, scale});
     let { splits, frames } = await coder.frameSignal(signal, {scale});
@@ -86,10 +93,10 @@
     });
     should(frames.length).equal(nFrames);
   });
-  it("TESTTESTtransform(...)", async()=>{
+  it("transform(...)", async()=>{
     let verbose = 1;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
-    let scale;
+    let scale = 10;
     let frameSize;
     let threshold = 2;
     let dampen = 36;

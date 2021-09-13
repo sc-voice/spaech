@@ -19,6 +19,8 @@ NAME
 
 SYNOPSIS
         coder [OPTIONS] 
+        coder --signal-in TRAIN_WAV --model-path MODEL_PATH --train
+        coder --signal-in SRC_WAV --model-path MODEL_PATH --signal-out DST_WAV
 
 DESCRIPTION
         Transform audio signals with an auto-encoder neural net
@@ -77,18 +79,27 @@ DESCRIPTION
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
-    -mp, --model-path LOCAL_FILE_PATH
+    -mp, --model-path MODEL_FOLDER
     -mp, --model-path URL
         JSON resource URL or local file path (test/model/coder)
 
+    -ro, --residual-out WAV_FILE
+        Output residual of signal minus tranformed signal.
+        
     -sc, --scale SCALE
         Signal normalization (16384)
+
+    -si, --signal-in WAV_FILE
+        Input signal
+
+    -so, --signal-out WAV_FILE
+        Output signal
 
     -ta, --train-attempts N
         Train code with up to N attempts to save a better model (1)
 
     -tr, --train  
-        Train coder from given WAVFILE
+        Train coder using input signal
 `);
     process.exit(0);
 }
@@ -110,10 +121,6 @@ for (var i = 2; i < nargs; i++) {
   if (i<2) { continue; }
   if (arg === '-?' || arg === '--help') {
     help();
-  } else if (arg === '-si' || arg === '--signal-in') {
-    cmdCfg.signalIn = argv[++i];
-  } else if (arg === '-so' || arg === '--signal-out') {
-    cmdCfg.signalOut = argv[++i];
   } else if (arg === '-du' || arg === '--decoder-units') {
     cmdCfg.decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-ea' || arg === '--encoder-alpha') {
@@ -141,14 +148,23 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.codeSize = Number(argv[++i]);
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = Number(argv[++i]);
+  } else if (arg === '-ro' || arg === '--residual-out') {
+    cmdCfg.residualOut = argv[++i];
+  } else if (arg === '-si' || arg === '--signal-in') {
+    cmdCfg.signalIn = argv[++i];
+  } else if (arg === '-so' || arg === '--signal-out') {
+    cmdCfg.signalOut = argv[++i];
   } else if (arg === '-tr' || arg === '--train') {
     cmdCfg.trainModel = true;
   } else if (arg === '-ll' || arg === '--log-level') {
     cmdCfg.logLevel = logger.logLevel = argv[++i];
+  } else {
+    throw logger.error('E_UNKNOWN_OPTION', `Unknown option: ${argv[i]}`);
   }
 }
 
 async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
+  assert(fnam, `Expected signal file path`);
   let buf = await fs.promises.readFile(fnam);
   let wf = new WaveFile(buf);
   return new Signal(wf.getSamples(false, Int16Array));
@@ -233,12 +249,24 @@ async function chartWorst({model, frames, stats, chartLines}) {
   });
 }
 
+async function writeSignal(fpath, signal) {
+  let wav = signal.toWav();
+  try {
+    await fs.promises.writeFile(fpath, wav);
+    logger.info(`writing signal: ${fpath} (${wav.length})`);
+  } catch(e) {
+    throw logger.error(`Could not write: ${fpath}`, e.message);
+  }
+}
+
 (async function() {
   let cfg = configuration(cmdCfg);
   let { 
     modelPath, 
     trainModel, 
+    residualOut,
     signalIn, 
+    signalOut,
     epochs, 
     initialEpoch, 
     logEpoch, 
@@ -247,8 +275,8 @@ async function chartWorst({model, frames, stats, chartLines}) {
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
-  let signal = await wavSignal(signalIn);
-  logger.info(`signal in: ${signal.data.length} samples ${signalIn}`);
+  let sigIn = await wavSignal(signalIn);
+  logger.info(`signal in: ${sigIn.data.length} samples ${signalIn}`);
 
   if (coder == null) {
     logger.info(`creating AutoEncoder`, cfg);
@@ -256,8 +284,8 @@ async function chartWorst({model, frames, stats, chartLines}) {
   }
   let { model } = coder;
   model.summary();
-  let { splits, frames } = coder.frameSignal(signal);
-  let statsSignal = await coder.validateSignal(signal);
+  let { splits, frames } = coder.frameSignal(sigIn);
+  let statsSigIn = await coder.validateSignal(sigIn);
 
   // Train
   if (trainModel) {
@@ -267,16 +295,16 @@ async function chartWorst({model, frames, stats, chartLines}) {
       let msStart = Date.now();
       let resTrained = trainModel && (await coder.train({frames, epochs, initialEpoch, logEpoch}));
       let msElapsed = Date.now() - msStart;
-      var statsTrained = await coder.validateSignal(signal);
+      var statsTrained = await coder.validateSignal(sigIn);
       logger.debug(`trained stats`, statsTrained);
       await chartWorst({model, frames, stats:statsTrained, chartLines});
-      logger.debug(`current stats`, statsSignal);
-      logger.info(`current mse:`, statsSignal.avg);
+      logger.debug(`current stats`, statsSigIn);
+      logger.info(`current mse:`, statsSigIn.avg);
       logger.info(`trained mse: ${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
       if (savedModel !== model) {
         logger.info(`saving new model#${iTrain} => ${modelUrl}`);
         save = iTrain;
-      } else if (statsTrained && statsTrained.avg < statsSignal.avg) {
+      } else if (statsTrained && statsTrained.avg < statsSigIn.avg) {
         logger.info(`saving better model#${iTrain} => ${modelUrl}`);
         save = iTrain;
       } else {
@@ -290,7 +318,23 @@ async function chartWorst({model, frames, stats, chartLines}) {
     }
   } else {
     logger.info(`no changes made to trained model`);
-    await chartWorst({model, frames, stats:statsSignal, chartLines});
+    await chartWorst({model, frames, stats:statsSigIn, chartLines});
   }
 
+  let sigOut;
+  if (signalOut) {
+    sigOut = sigOut || coder.transform(sigIn);
+    await writeSignal(signalOut, sigOut);
+  }
+
+  if (residualOut) {
+    let { data:dataOut } = sigOut || coder.transform(sigIn);
+    let { data:dataIn } = sigIn;
+    let dataRes = new Int16Array(dataOut.length);
+    for (let i=0; i < dataOut.length; i++) {
+      dataRes[i] = dataIn[i] - dataOut[i];
+    }
+    let sigRes = new Signal(dataRes);
+    await writeSignal(residualOut, sigRes);
+  }
 })();

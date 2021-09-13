@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [ ! -e local ]; then 
+  mkdir local 
+fi
+cd local
+
+if [ ! -e ebt-data ]; then
+  git clone https://github.com/ebt-site/ebt-data
+fi
+cd ebt-data
+

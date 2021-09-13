@@ -241,10 +241,11 @@
         let { start, length } = split;
         let nFrames = Math.ceil(length/frameSize);
         let end = start + nFrames*frameSize;
+        logger.info(`transform word#${i+1}`, JSON.stringify({start, length}));
         for (let iFrame = start; iFrame < end; iFrame+=frameSize) {
           let frameIn = dataIn.subarray(iFrame,iFrame+frameSize);
-          let x = tf.tensor2d([[...frameIn]]);
-          let y = predict(x).dataSync().map(v=>Math.round(v));
+          let x = tf.tensor2d([[...frameIn].map(v=>v/scale)]);
+          let y = predict(x).dataSync().map(v=>Math.round(v*scale));
           let frameOut = y;
           dataOut.set(frameOut, iFrame);
         }

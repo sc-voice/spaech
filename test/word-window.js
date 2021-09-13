@@ -121,8 +121,7 @@
     let text = 'cab';
     let signalFirst = 10;
     let signalLast = 110;
-    let n = 1+4+6+4+1;
-    let window = [1/n, 4/n, 6/n, 4/n, 1/n];
+    let window = WordWindow.binomialWindow({width:5, range:'sum1'});
     let tw = new WordWindow({alphabet, text, signalFirst, signalLast, window});
 
     should.deepEqual(tw.textSignalIndex, [
