@@ -28,9 +28,11 @@
     should.deepEqual(sig.stats(), Signal.stats(data));
   });
   it("rmsErr(that)", ()=>{
-    let a = [1,2,3,4,5];
-    let b = [2,3,4,5,6];
+    let a = new Int16Array([100, -100, 100, -100, 100]);
+    let b = new Int16Array([101, -100,  99, -102, 100]);
     let sig = new Signal(a);
+    should(Signal.rmsErr(a,a)).equal(0);
+    should(Signal.rmsErr(a,b)).equal(1.09544511501033210);
     should.deepEqual(sig.rmsErr(b), Signal.rmsErr(a,b));
   });
   it("stats() => stats", async()=>{

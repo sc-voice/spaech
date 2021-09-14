@@ -9,6 +9,7 @@ const { WaveFile } = require('wavefile');
 const {
   Chart,
   AutoEncoder,
+  Mdct,
   Signal,
 } = require('../index');
 
@@ -70,8 +71,15 @@ DESCRIPTION
         alpha number will be used to generate an alpha for each
         encoder/decoder layer. The default is the Golden Ratio.
 
+    -fd, --frame-dampen N
+        Number of consecutive samples above threshold to mark 
+        start of frame (36)
+
     -fs, --frame-size
         Audio is encoded/decoded by consecutive frames of given size. (192)
+
+    -ft, --frame-threshold N
+        Absolute value of minium signal threshold that starts frame (2)
 
     -?, --help
         Print help
@@ -146,6 +154,10 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.trainAttempts = Number(argv[++i]);
   } else if (arg === '-cs' || arg === '--code-size') {
     cmdCfg.codeSize = Number(argv[++i]);
+  } else if (arg === '-fd' || arg === '--frame-dampent') {
+    cmdCfg.dampen = Number(argv[++i]);
+  } else if (arg === '-ft' || arg === '--frame-threshold') {
+    cmdCfg.threshold = Number(argv[++i]);
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = Number(argv[++i]);
   } else if (arg === '-ro' || arg === '--residual-out') {
@@ -163,11 +175,24 @@ for (var i = 2; i < nargs; i++) {
   }
 }
 
-async function wavSignal(fnam=EVAM_ME_SUTTAM_WAV) {
-  assert(fnam, `Expected signal file path`);
-  let buf = await fs.promises.readFile(fnam);
+async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
+  assert(fpath, `Expected signal file path`);
+  let buf = await fs.promises.readFile(fpath);
   let wf = new WaveFile(buf);
   return new Signal(wf.getSamples(false, Int16Array));
+}
+
+async function readSignal(fpath) {
+  assert(fpath, `Expected signal file path: ${fpath}`);
+  if (fpath.endsWith('.wav')) {
+    return wavSignal(fpath);
+  } else if (fpath.endsWith('.mdct')) {
+    let nodeBuf = await fs.promises.readFile(fpath);
+    let f32 = new Float32Array(nodeBuf.buffer);
+    return new Signal(f32);
+  } else {
+    throw logger.error(`E_FILE_TYPE`, `Expected WAV or MDCT file:${fpath}`);
+  }
 }
 
 function normalizeUrl(urlOrPath) {
@@ -190,6 +215,8 @@ function configuration(cfg=cmdCfg) {
     signalIn: EVAM_ME_SUTTAM_WAV,
     signalOut: undefined,
     trainModel: false,
+    threshold: 2,
+    dampen: 36,
     frameSize: 192,
     codeSize: 6,
     logLevel: 'info',
@@ -250,21 +277,29 @@ async function chartWorst({model, frames, stats, chartLines}) {
 }
 
 async function writeSignal(fpath, signal) {
-  let wav = signal.toWav();
-  try {
-    await fs.promises.writeFile(fpath, wav);
-    logger.info(`writing signal: ${fpath} (${wav.length})`);
-  } catch(e) {
-    throw logger.error(`Could not write: ${fpath}`, e.message);
+  if (fpath.endsWith('.wav')) {
+    let wav = signal.toWav();
+    try {
+      await fs.promises.writeFile(fpath, wav);
+      logger.info(`writing signal: ${fpath} (${wav.length})`);
+    } catch(e) {
+      throw logger.error(`Could not write: ${fpath}`, e.message);
+    }
+  } else {
+    throw logger.error('E_FILE_UNSUPPORTED', `Unsupported file type: ${fpath}`);
   }
 }
 
 (async function() {
   let cfg = configuration(cmdCfg);
   let { 
+    frameSize,
     modelPath, 
     trainModel, 
     residualOut,
+    scale,
+    threshold,
+    dampen,
     signalIn, 
     signalOut,
     epochs, 
@@ -273,9 +308,9 @@ async function writeSignal(fpath, signal) {
     chartLines,
     trainAttempts,
   } = cfg;
-  logger.info(script, argv.slice(2).join(' '));
+  logger.info(script, argv.slice(2).join(' '), cfg);
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
-  let sigIn = await wavSignal(signalIn);
+  let sigIn = await readSignal(signalIn);
   logger.info(`signal in: ${sigIn.data.length} samples ${signalIn}`);
 
   if (coder == null) {
@@ -324,6 +359,18 @@ async function writeSignal(fpath, signal) {
   let sigOut;
   if (signalOut) {
     sigOut = sigOut || coder.transform(sigIn);
+    if (signalIn.endsWith('.mdct')) {
+      let { data: coeffs } = sigOut;
+      logger.info(`Creating signal from MDCT coefficients:`,
+        `${coeffs.constructor.name}[${coeffs.length}]`);
+      let mdct = new Mdct({frameSize});
+      let window = Mdct.WINDOWS[1];
+      let opts = {window};
+      let dataLength = coeffs.length; // TODO: use ACTUAL data length
+      let dataOut = mdct.decode(coeffs, opts).slice(0, dataLength);
+      console.log(`dataOut`, dataOut.constructor.name);
+      sigOut = new Signal(dataOut);
+    }
     await writeSignal(signalOut, sigOut);
   }
 

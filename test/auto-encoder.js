@@ -93,6 +93,19 @@
     });
     should(frames.length).equal(nFrames);
   });
+  it("TESTTESTtransform datatype", async()=>{
+    let tf32 = Float32Array;
+    let ti16 = Int16Array;
+    let arg1 = [1,2,3];
+    let f32 = Reflect.construct(tf32, [ arg1 ]);
+    let i16 = Reflect.construct(ti16, [ arg1 ]);
+    should.deepEqual(f32, new Float32Array(arg1));
+    should.deepEqual(f32.constructor, Float32Array);
+    should.deepEqual(i16, new Int16Array(arg1));
+    should.deepEqual(i16.constructor, Int16Array);
+    should.deepEqual([...f32.map(v=>v/3)], [0.3333333432674408, 0.6666666865348816, 1]);
+    should.deepEqual([...i16.map(v=>v/3)], [0, 0, 1]);  // Trunc
+  });
   it("transform(...)", async()=>{
     let verbose = 1;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);

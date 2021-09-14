@@ -10,9 +10,11 @@
   this.timeout(10*1000);
 
   const EVAM_ME_SUTTAM = path.join(__dirname, 'data/evam-me-suttam.wav');
+  const EVAM_ME_SUTTAM_MDCT = path.join(__dirname, 'data/evam-me-suttam.mdct');
+  const EVAM_ME_SUTTAM_MDCT_WAV = path.join(__dirname, 'data/evam-me-suttam_mdct.wav');
   const AN9_20_4_3 = path.join(__dirname, 'data/an9.20_4.3.wav');
 
-  async function wavSignal(fnam=EVAM_ME_SUTTAM) {
+  async function wavSamples(fnam=EVAM_ME_SUTTAM) {
     let buf = await fs.promises.readFile(fnam);
     let wf = new WaveFile(buf);
     return wf.getSamples(false, Int16Array);
@@ -465,7 +467,7 @@
   });
   it ("encode/decode() EVAM_ME_SUTTAM", async()=>{
     let verbose = 1;
-    let signal = await wavSignal(EVAM_ME_SUTTAM);
+    let signal = await wavSamples(EVAM_ME_SUTTAM);
     for (let i=0; i<Mdct.WINDOWS.length; i++) {
       let window = Mdct.WINDOWS[i];
       let frameSize = 256;
@@ -544,52 +546,32 @@
     should(window(6,N)).equal(sqrt05);
     should(window(7,N)).equal(sqrt05);
   });
-  it ("encode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
+  it ("TESTTESTencode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
     let verbose = 1;
-    let signal = await wavSignal(EVAM_ME_SUTTAM);
+    let dataIn = await wavSamples(EVAM_ME_SUTTAM);
     let window = Mdct.WINDOWS[1];
     let frameSize = 192;
     let opts = {window};
     let nCoeffs = frameSize/2;
     let mdct = new Mdct({frameSize});
-    let coeffs = mdct.encode(signal, opts);
-    let threshold = 3;
-    let nzSig = signal.findIndex(v=>Math.abs(v) > threshold);
-    let iSig = Math.ceil(nzSig/frameSize)*frameSize;
-    let sampleRate = 22050;
-    let tCoeffs = 1/sampleRate;
-    let i = iSig;
-    let prec = 2;
-    console.log(`nCoeffs`, nCoeffs, coeffs.length/nCoeffs, signal.length);
 
-    let fnam = `evam-me-suttam-mdct-${frameSize}.csv`;
-    let fpath = path.join(__dirname, 'data', fnam);
-    let csv = [];
-    for (let i=iSig; i < coeffs.length; i+=nCoeffs) {
-      let ms = (i*tCoeffs).toFixed(3);
-      let ic = i+20;
-      csv.push([ms, ...coeffs.slice(i, i+nCoeffs).map(v=>v.toFixed(prec))].join(', '));
-    }
-    fs.promises.writeFile(fpath, csv.join('\n'));
+    // encode
+    let coeffs = new Float32Array(mdct.encode(dataIn, opts));
+    should(coeffs.length).equal(55584);
+    let stats = Signal.stats(coeffs);
+    await fs.promises.writeFile(EVAM_ME_SUTTAM_MDCT, coeffs);
 
-/*
-    let dataOut = mdct.decode(coeffs, opts);
-    let padding = frameSize/2 + (frameSize-signal.length%frameSize);
-    should(dataOut.length).equal(signal.length+padding);
-    let threshold = 5;
-    let nzDataOut = dataOut.findIndex(v=>Math.abs(v) > threshold);
-    should(nzDataOut-nzSig).equal(0);
-    let signal2 = dataOut.slice(signal.length);
-    let rmsErr = Signal.rmsErr(signal, signal2);
-    should(rmsErr).equal(0); // this is actually remarkable
+    // decode
+    let coeffBuf = await fs.promises.readFile(EVAM_ME_SUTTAM_MDCT);
+    let coeffs2 = new Float32Array(coeffBuf.buffer);
+    should.deepEqual(coeffs2, coeffs);
+    let dataOut = mdct.decode(coeffs, opts).slice(0, dataIn.length);
 
-    verbose && console.log(`encode/decode() `,
-      JSON.stringify({
-      rmsErr, 
-      nzSig, 
-      window:window.name,
-    }));
-  */
+    let mse = Signal.rmsErr(dataIn, dataOut);
+    should(mse).equal(0.4871949722361903);
+    let sigOut = new Signal(dataOut);
+    let wavOut = sigOut.toWav();
+    await fs.promises.writeFile(EVAM_ME_SUTTAM_MDCT_WAV, wavOut);
   });
 
 })
