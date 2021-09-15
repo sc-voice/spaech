@@ -42,7 +42,6 @@
       avg: 3,
       iMax: 3,
       iMin: 0,
-      avg32: 3,
       median: 3,
       sum: 15,
       max: 5,
@@ -53,7 +52,6 @@
     should.deepEqual(Signal.stats(dataEven), {
       count: 6,
       avg: 12.5,
-      avg32: 12.5,
       iMax: 5,
       iMin: 0,
       median: 3.5,
@@ -72,7 +70,7 @@
     should(Signal.rmsErr(a,b)).equal(1);
     should(Signal.rmsErr(a,c)).equal(Math.sqrt((16+4+0+4+16)/5));
   });
-  it("split() => non-zero groups", async()=>{
+  it("TESTTESTsplit() => non-zero groups", async()=>{
     let verbose = 0;
     let data = [
       /*  0 */ 0,0,0,
@@ -84,6 +82,9 @@
       /* 15 */ 0,0,0,0,
     ];
     let sig = new Signal(data);
+    should.deepEqual(sig.split({verbose, threshold:0}), [
+      { start: 0, length: data.length },
+    ]);
     should.deepEqual(sig.split({verbose}), [
       { start: 3, length: 4 },
       { start: 8, length: 1 },
@@ -163,7 +164,6 @@
       iMax: 1764940,
       sum: 2340943,
       avg: 0.8914376867599811,
-      avg32: 0.8914377093315125,
       median: -1,
       stdDev: 1803.544548440329,
     });

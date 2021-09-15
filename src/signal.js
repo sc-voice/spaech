@@ -87,7 +87,6 @@
         iMax,
         sum, 
         avg, 
-        avg32: Math.fround(avg), 
         median, 
         stdDev,
       }
@@ -191,6 +190,14 @@
         }
         verbose && console.log(`split`, {v, i, state, sigStart, zeroStart});
       }
+      if (state === SIGNAL) {
+        let firstBlock = Math.floor(sigStart/blockSize);
+        groups.push({
+          start: firstBlock,
+          length: Math.ceil(data.length/blockSize) - firstBlock,
+        });
+      }
+      verbose && console.log(`split end`); 
       return groups;
     }
 

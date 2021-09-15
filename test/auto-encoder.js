@@ -93,7 +93,7 @@
     });
     should(frames.length).equal(nFrames);
   });
-  it("TESTTESTtransform datatype", async()=>{
+  it("transform datatype", async()=>{
     let tf32 = Float32Array;
     let ti16 = Int16Array;
     let arg1 = [1,2,3];

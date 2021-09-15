@@ -87,6 +87,12 @@ DESCRIPTION
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
+    -mi, --mdct-in WAV_FILE
+        Encode input signal as MDCT coefficients
+
+    -ms, --mdct-stats JSON_FILE
+        Save MDCT coefficient stats for input signal
+
     -mp, --model-path MODEL_FOLDER
     -mp, --model-path URL
         JSON resource URL or local file path (test/model/coder)
@@ -120,56 +126,67 @@ const script = argv[1].split('/').pop();
 
 var cmdCfg = {};
 
-var nargs = process.argv.length;
+var nargs = argv.length;
 if (nargs < 3) {
     help();
 }
 for (var i = 2; i < nargs; i++) {
-  var arg = process.argv[i];
+  var arg = argv[i];
+  let requiredArg = ()=>{
+    let nextArg = argv[++i];
+    if (nextArg == null) {
+      throw logger.error('E_REQUIRED', `Expected additional information for: ${arg}`);
+    }
+    return nextArg;
+  }
   if (i<2) { continue; }
   if (arg === '-?' || arg === '--help') {
     help();
   } else if (arg === '-du' || arg === '--decoder-units') {
-    cmdCfg.decoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+    cmdCfg.decoderUnits = requiredArg().split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-ea' || arg === '--encoder-alpha') {
-    cmdCfg.encoderAlpha = argv[++i].split(',').map(v=>Number(v));
+    cmdCfg.encoderAlpha = requiredArg().split(',').map(v=>Number(v));
     if (cmdCfg.encoderAlpha.length === 1) { cmdCfg.encoderAlpha = cmdCfg.encoderAlpha[0]; }
   } else if (arg === '-le' || arg === '--log-epoch') {
-    cmdCfg.logEpoch = Number(argv[++i]);
+    cmdCfg.logEpoch = Number(requiredArg());
   } else if (arg === '-el' || arg === '--encoder-layers') {
-    cmdCfg.encoderLayers = Number(argv[++i]);
+    cmdCfg.encoderLayers = Number(requiredArg());
   } else if (arg === '-eu' || arg === '--encoder-units') {
-    cmdCfg.encoderUnits = argv[++i].split(',').map(v=>Math.max(1, Math.round(Number(v))));
+    cmdCfg.encoderUnits = requiredArg().split(',').map(v=>Math.max(1, Math.round(Number(v))));
   } else if (arg === '-sc' || arg === '--scale') {
-    cmdCfg.scale = Number(argv[++i]);
+    cmdCfg.scale = Number(requiredArg());
   } else if (arg === '-ep' || arg === '--epochs') {
-    cmdCfg.epochs = Number(argv[++i]);
+    cmdCfg.epochs = Number(requiredArg());
   } else if (arg === '-ie' || arg === '--initial-epoch') {
-    cmdCfg.initialEpoch = Number(argv[++i]);
+    cmdCfg.initialEpoch = Number(requiredArg());
+  } else if (arg === '-mi' || arg === '--mdct-in') {
+    cmdCfg.mdctIn = requiredArg();
+  } else if (arg === '-ms' || arg === '--mdct-stats') {
+    cmdCfg.mdctStatsPath = requiredArg();
   } else if (arg === '-mp' || arg === '--model-path') {
-    cmdCfg.modelPath = argv[++i];
+    cmdCfg.modelPath = requiredArg();
   } else if (arg === '-cl' || arg === '--chart-lines') {
-    cmdCfg.chartLines = Number(argv[++i]);
+    cmdCfg.chartLines = Number(requiredArg());
   } else if (arg === '-ta' || arg === '--train-attempts') {
-    cmdCfg.trainAttempts = Number(argv[++i]);
+    cmdCfg.trainAttempts = Number(requiredArg());
   } else if (arg === '-cs' || arg === '--code-size') {
-    cmdCfg.codeSize = Number(argv[++i]);
+    cmdCfg.codeSize = Number(requiredArg());
   } else if (arg === '-fd' || arg === '--frame-dampent') {
-    cmdCfg.dampen = Number(argv[++i]);
+    cmdCfg.dampen = Number(requiredArg());
   } else if (arg === '-ft' || arg === '--frame-threshold') {
-    cmdCfg.threshold = Number(argv[++i]);
+    cmdCfg.threshold = Number(requiredArg());
   } else if (arg === '-fs' || arg === '--frame-size') {
-    cmdCfg.frameSize = Number(argv[++i]);
+    cmdCfg.frameSize = Number(requiredArg());
   } else if (arg === '-ro' || arg === '--residual-out') {
-    cmdCfg.residualOut = argv[++i];
+    cmdCfg.residualOut = requiredArg();
   } else if (arg === '-si' || arg === '--signal-in') {
-    cmdCfg.signalIn = argv[++i];
+    cmdCfg.signalIn = requiredArg();
   } else if (arg === '-so' || arg === '--signal-out') {
-    cmdCfg.signalOut = argv[++i];
+    cmdCfg.signalOut = requiredArg();
   } else if (arg === '-tr' || arg === '--train') {
     cmdCfg.trainModel = true;
   } else if (arg === '-ll' || arg === '--log-level') {
-    cmdCfg.logLevel = logger.logLevel = argv[++i];
+    cmdCfg.logLevel = logger.logLevel = requiredArg();
   } else {
     throw logger.error('E_UNKNOWN_OPTION', `Unknown option: ${argv[i]}`);
   }
@@ -182,16 +199,35 @@ async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
   return new Signal(wf.getSamples(false, Int16Array));
 }
 
-async function readSignal(fpath) {
-  assert(fpath, `Expected signal file path: ${fpath}`);
-  if (fpath.endsWith('.wav')) {
-    return wavSignal(fpath);
-  } else if (fpath.endsWith('.mdct')) {
-    let nodeBuf = await fs.promises.readFile(fpath);
-    let f32 = new Float32Array(nodeBuf.buffer);
-    return new Signal(f32);
-  } else {
-    throw logger.error(`E_FILE_TYPE`, `Expected WAV or MDCT file:${fpath}`);
+async function readSignal({signalIn, mdctIn, frameSize}) {
+  assert(signalIn || mdctIn, `Expected input signal path`);
+  if (signalIn) {
+    if (signalIn.endsWith('.wav')) {
+      return await wavSignal(signalIn);
+    } else if (signalIn.endsWith('.mdct')) {
+      let nodeBuf = await fs.promises.readFile(signalIn);
+      let f32 = new Float32Array(nodeBuf.buffer);
+      return new Signal(f32);
+    } else {
+      throw logger.error(`E_FILE_TYPE`, `Expected WAV or MDCT file:${signalIn}`);
+    }
+  }
+  if (mdctIn) {
+    if (mdctIn.endsWith('.wav')) {
+      let wavSig = await wavSignal(mdctIn);
+      let window = Mdct.WINDOWS[1];
+      let opts = {window};
+      let mdct = new Mdct({frameSize});
+      let coeffs = new Float32Array(mdct.encode(wavSig.data, opts));
+      logger.info(`readSignal() encoded as MDCT coefficients: ${mdctIn}`);
+      return new Signal(coeffs);
+    } else if (mdctIn.endsWith('.mdct')) {
+      let nodeBuf = await fs.promises.readFile(mdctIn);
+      let f32 = new Float32Array(nodeBuf.buffer);
+      return new Signal(f32);
+    } else {
+      throw logger.error(`E_FILE_TYPE`, `Expected WAV or MDCT file:${mdctIn}`);
+    }
   }
 }
 
@@ -210,28 +246,32 @@ function normalizeUrl(urlOrPath) {
 function configuration(cfg=cmdCfg) {
   return Object.assign({}, {
     chartLines: 15,
-    epochs: 100,
-    scale: 16384,
-    signalIn: EVAM_ME_SUTTAM_WAV,
-    signalOut: undefined,
-    trainModel: false,
-    threshold: 2,
-    dampen: 36,
-    frameSize: 192,
     codeSize: 6,
-    logLevel: 'info',
-    verbose: false,
+    dampen: 36,
+    decoderUnits: undefined,
+    encoderAlpha: 1.61803398875,
     encoderLayers: 3,
     encoderUnits: 0.8,
-    encoderAlpha: 1.61803398875,
-    decoderUnits: undefined,
+    epochs: 100,
+    frameSize: 192,
     initialEpoch: 0,
+    logLevel: 'info',
+    mdctIn: undefined,
+    mdctStatsPath: undefined,
+    modelPath: undefined,
+    scale: 16384,
+    signalIn: undefined,
+    signalOut: undefined,
+    threshold: 2,
     trainAttempts: 1,
-    modelPath: 'test/model/coder',
+    trainModel: false,
+    verbose: false,
+
   }, cfg);
 }
 
 async function loadModel(modelPath) {
+  if (modelPath == null) { return {}; }
   let modelUrl = normalizeUrl(modelPath);
   let coder;
   let savedModel;
@@ -290,6 +330,23 @@ async function writeSignal(fpath, signal) {
   }
 }
 
+async function calcMdctStats(coeffs, frameSize, mdctStatsPath) {
+  assert(coeffs.constructor.name === 'Float32Array', 'Expected Float32Array');
+  assert(frameSize, `Expected frameSize`);
+  let stats = [];
+  for (let iCoeff = 0; iCoeff < frameSize; iCoeff++) {
+    let c = [];
+    for (let i = iCoeff; i < coeffs.length; i+=frameSize) {
+      c.push(coeffs[i]);
+    }
+    let cStats = Signal.stats(c);
+    cStats.coefficient = iCoeff;
+    stats.push(cStats);
+  }
+  await fs.promises.writeFile(mdctStatsPath, JSON.stringify(stats, null, '\t'));
+  return stats;
+}
+
 (async function() {
   let cfg = configuration(cmdCfg);
   let { 
@@ -300,6 +357,8 @@ async function writeSignal(fpath, signal) {
     scale,
     threshold,
     dampen,
+    mdctIn,
+    mdctStatsPath,
     signalIn, 
     signalOut,
     epochs, 
@@ -310,17 +369,20 @@ async function writeSignal(fpath, signal) {
   } = cfg;
   logger.info(script, argv.slice(2).join(' '), cfg);
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
-  let sigIn = await readSignal(signalIn);
-  logger.info(`signal in: ${sigIn.data.length} samples ${signalIn}`);
+  let sigIn = await readSignal({signalIn, mdctIn, frameSize});
+  let { data:dataIn } = sigIn;
+  logger.info(`signal in: ${dataIn.constructor.name}[${dataIn.length}]`);
 
   if (coder == null) {
-    logger.info(`creating AutoEncoder`, cfg);
+    logger.info(`creating new AutoEncoder`);
     coder = new AutoEncoder(cfg);
   }
   let { model } = coder;
-  model.summary();
-  let { splits, frames } = coder.frameSignal(sigIn);
+  modelPath && model.summary();
+  let { splits, frames } = coder.frameSignal(sigIn, {threshold, dampen, scale});
   let statsSigIn = await coder.validateSignal(sigIn);
+
+  let mectStats = mdctStatsPath && await calcMdctStats(sigIn.data, frameSize, mdctStatsPath);
 
   // Train
   if (trainModel) {
@@ -351,7 +413,7 @@ async function writeSignal(fpath, signal) {
     } else {
       logger.info(`Could not train better model after ${trainAttempts} attempts`);
     }
-  } else {
+  } else if (modelPath) {
     logger.info(`no changes made to trained model`);
     await chartWorst({model, frames, stats:statsSigIn, chartLines});
   }
@@ -376,7 +438,6 @@ async function writeSignal(fpath, signal) {
 
   if (residualOut) {
     let { data:dataOut } = sigOut || coder.transform(sigIn);
-    let { data:dataIn } = sigIn;
     let dataRes = new Int16Array(dataOut.length);
     for (let i=0; i < dataOut.length; i++) {
       dataRes[i] = dataIn[i] - dataOut[i];

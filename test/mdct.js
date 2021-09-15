@@ -449,21 +449,23 @@
     let nums = new Int8Array(gen);
     should(nums.buffer.byteLength).equal(5);
   });
-  it ("encode(...) MDCT coefficients => data[1]", ()=>{
+  it ("TESTTESTencode(...) MDCT coefficients => data[1]", ()=>{
     let frameSize = 8;
-    let type = Float64Array;
+    let type = Float32Array;
     let nCoeffs = frameSize/2;
     let verbose = 0;
-    let data = new Int16Array([ -10, ]);
+    let data = new Int16Array([ -10, 0, 0, 0, 0, 0, 0, 0 ]).slice(0,4);
     let signalLength = data.length;
     let mdct = new Mdct({frameSize});
     let encoded = mdct.encode(data, {verbose, type});
+    should(encoded.constructor).equal(Float32Array);
+    console.log(`encoded`, encoded);
     let zeros = new type(nCoeffs);
     should(encoded).instanceOf(type);
-    should(encoded.length).equal(frameSize+nCoeffs);
     let decoded = mdct.decode(encoded, {verbose, signalLength});
     should(decoded.length).equal(data.length);
     should.deepEqual(decoded, data);
+    should(encoded.length).equal(frameSize+nCoeffs);
   });
   it ("encode/decode() EVAM_ME_SUTTAM", async()=>{
     let verbose = 1;
@@ -546,7 +548,7 @@
     should(window(6,N)).equal(sqrt05);
     should(window(7,N)).equal(sqrt05);
   });
-  it ("TESTTESTencode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
+  it ("encode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
     let verbose = 1;
     let dataIn = await wavSamples(EVAM_ME_SUTTAM);
     let window = Mdct.WINDOWS[1];
@@ -554,6 +556,7 @@
     let opts = {window};
     let nCoeffs = frameSize/2;
     let mdct = new Mdct({frameSize});
+    should(dataIn.length).equal(55296);
 
     // encode
     let coeffs = new Float32Array(mdct.encode(dataIn, opts));
