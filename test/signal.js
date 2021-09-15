@@ -70,7 +70,7 @@
     should(Signal.rmsErr(a,b)).equal(1);
     should(Signal.rmsErr(a,c)).equal(Math.sqrt((16+4+0+4+16)/5));
   });
-  it("TESTTESTsplit() => non-zero groups", async()=>{
+  it("split() => non-zero groups", async()=>{
     let verbose = 0;
     let data = [
       /*  0 */ 0,0,0,

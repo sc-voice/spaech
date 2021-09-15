@@ -1,5 +1,6 @@
 (function(exports) {
   const { logger } = require('log-instance');
+  const assert = require('assert');
   const Compander = require('./compander');
   const Int16Frames = require(`./int16-frames`);
   const Signal = require('./signal');
@@ -8,10 +9,10 @@
     constructor(opts={}) {
       // https://en.wikipedia.org/wiki/Modified_discrete_cosine_transform;
 
+      logger.logInstance(this);
       let frameSize = opts.frameSize || 32;
-      if (frameSize < 2) {
-        throw new Error(`minimum frameSize is 2`);
-      }
+      assert(frameSize % 2 === 0, `[E_FRAMESIZE_ODD] frameSize must be even: ${frameSize}`);
+      assert(0 < frameSize, `[E_FRAMESIZE_PLUS] frameSize must be positive: ${frameSize}`);
 
       let N  = frameSize / 2;
       let cos_kn = [];
@@ -90,14 +91,14 @@
 
     encodeFrame(int16Frame, opts={}) {
       let { enc_kn, coeffsPerFrame, frameSize, scale } = this;
-      let { type=Float64Array } = opts;
+      let { type=Float32Array } = opts;
       let encoded = new type(coeffsPerFrame);
       for (let k = 0; k < coeffsPerFrame; k++) {
         let sum = 0;
         for (let n=0; n < frameSize; n++) {
           sum += int16Frame[n] * enc_kn[k][n];
         }
-        encoded[k] = sum; ///scale;
+        encoded[k] = sum; 
       }
       return encoded;
     }
@@ -117,28 +118,41 @@
 
     encodeFrames(itInt16, opts={}) {
       let { coeffsPerFrame, frameSize } = this;
-      let { verbose, type } = opts;
+      let { verbose, } = opts;
       let zeros = new Int16Array(coeffsPerFrame);
       let that = this;
       let frameGenerator = function*() {
         let itSignal = new Int16Frames(itInt16, frameSize).frames();
         let prevFrame = zeros;
-        for (let frame; prevFrame.length; yield that.encodeFrame(frame, opts)){
+        for (let frame; prevFrame.length; ) {
           if (prevFrame.length === coeffsPerFrame) {
             let { value, done } = itSignal.next();
             if (done) {  
               frame = new Int16Array([...prevFrame, ...zeros]);
               prevFrame = [];
-              verbose && console.log(`mdct.encodeFrames#3`, frame.join(','));
+              verbose && that.info(`encodeFrames#3`, frame.join(','));
+              if (frame.filter(v=>v).length !== 0) {
+                throw that.error(`[E_PAD_SIGNAL] Signal should end with ${coeffsPerFrame} zeros`);
+              }
+              //yield that.encodeFrame(frame, opts);
+              break;
             } else {
               frame = new Int16Array([...prevFrame, ...value.slice(0, coeffsPerFrame)]);
               prevFrame = value;
-              verbose && console.log(`mdct.encodeFrames#1`, frame.join(','));
+              let coeffs = that.encodeFrame(frame, opts);
+              verbose && that.info(`encodeFrames#1`, frame.join(','), '=>', 
+                [...coeffs].map(v=>v.toFixed(2)).join(','));
+              yield coeffs;
             }
-          } else if (prevFrame.length === frameSize) {
+          } else {
+            assert(prevFrame.length === frameSize, 
+              `[E_FRAMELENGTH] Unexpected frame length:${prevFrame.length}`);
             frame = prevFrame;
-            verbose && console.log(`mdct.encodeFrames#2`, frame.join(','));
             prevFrame = prevFrame.slice(coeffsPerFrame, frameSize);
+            let coeffs = that.encodeFrame(frame, opts);
+            verbose && that.info(`encodeFrames#2`, frame.join(','), '=>',
+              [...coeffs].map(v=>v.toFixed(2)).join(','));
+            yield coeffs;
           }
         }
       };
@@ -154,36 +168,44 @@
       let curFrame = [];
       let assertCoeffs = coeffs=>{
         if (coeffs.length) {
-          let msg = [
+          throw that.error(
             `Mdct.decodeFrames() expected groups of ${coeffsPerFrame} coefficients.`,
-            `Found: ${coeffs.length}`
-          ].join(' ');
-          throw new Error(msg);
+            `Found: ${coeffs.length}`);
         }
         return true;
       }
       let frames = function*() {
-        let nFrames = 0;
-        for (let nFrames=0;;) {
+        let nBlocks = 0;
+        for (let nBlocks=0;;) {
           let { value:coeffs, done } = itCoeffs.next();
-          if (done) { return; }
+          nBlocks++;
+          if (done) { 
+            verbose && that.info(`mdct.decodeFrames#3@${nBlocks} flush zero block`); 
+            if (nBlocks%2) {
+              yield curFrame;
+            }
+            return; 
+          }
           let nextFrame = that.decodeFrame(coeffs, opts);
-          nFrames++;
-          verbose && console.log(`mdct.decodeFrames`, 
-            [...coeffs].map(v=>v.toFixed(2)).join(', '), 
-            '=>',
-            nextFrame.join(', '));
           if (curFrame.length === frameSize) {
+            verbose && that.info(`mdct.decodeFrames#2@${nBlocks}`, 
+              [...coeffs].map(v=>v.toFixed(2)).join(','), 
+              '=>',
+              nextFrame.join(','));
             for (let i=0; i<coeffsPerFrame; i++) {
               curFrame[i+coeffsPerFrame] += nextFrame[i];
             }
-            if (nFrames%2) {
+            if (nBlocks%2) {
               yield curFrame;
             }
             curFrame = [
               ...curFrame.slice(-coeffsPerFrame), 
               ...nextFrame.slice(-coeffsPerFrame)];
           } else {
+            verbose && that.info(`mdct.decodeFrames#1@${nBlocks}`, 
+              [...coeffs].map(v=>v.toFixed(2)).join(','), 
+              '=>',
+              nextFrame.join(','));
             curFrame = nextFrame;
           }
         }
@@ -192,104 +214,21 @@
       return frames();
     } /* decodeFrames */
 
-    toCoefficients(itInt16, opts={}) { // slow
-      let that = this;
-      let { coeffsPerFrame, frameSize } = this;
-      let coeffGenerator = function*() {
-        let coeffs;
-        let itLappedFrames = that.encodeFrames(itInt16, opts);
-        for (let iCoeff=coeffsPerFrame; ; iCoeff++) {
-          if (iCoeff >= coeffsPerFrame) {
-            let { value, done } = itLappedFrames.next();
-            if ( done ) { return; }
-            coeffs = value;
-            iCoeff = 0;
-          }
-          yield coeffs[iCoeff];
-        }
-      };
-
-      return coeffGenerator(); 
-    }
-
-    fromCoefficients(itCoeffs, opts={}) { // slow
-      let { coeffsPerFrame, frameSize, scale } = this;
-      itCoeffs = Signal.toIterator(itCoeffs);
-      let { verbose } = opts;
-      let zeros = new Int16Array(coeffsPerFrame);
-      let that = this;
-      let curFrame = [];
-      let assertCoeffs = coeffs=>{
-        if (coeffs.length) {
-          let msg = [
-            `Mdct.fromCoefficients() expected groups of ${coeffsPerFrame} coefficients.`,
-            `Found: ${coeffs.length}`
-          ].join(' ');
-          throw new Error(msg);
-        }
-        return true;
-      }
-      let frames = function*() {
-        let nFrames = 0;
-        for (let nFrames=0;;) {
-          let coeffs = [];
-          for (let i=0; i< coeffsPerFrame; i++) {
-            let { value, done } = itCoeffs.next();
-            if (done && assertCoeffs(coeffs)) { return; }
-            coeffs.push(value);
-          }
-          let nextFrame = that.decodeFrame(coeffs, opts);
-          nFrames++;
-          verbose && console.log(`decode`, 
-            [...coeffs].map(v=>v.toFixed(2)).join(', '), 
-            '=>',
-            nextFrame.join(', '));
-          if (curFrame.length === frameSize) {
-            for (let i=0; i<coeffsPerFrame; i++) {
-              curFrame[i+coeffsPerFrame] += nextFrame[i];
-            }
-            if (nFrames%2) {
-              yield curFrame;
-            }
-            curFrame = [
-              ...curFrame.slice(-coeffsPerFrame), 
-              ...nextFrame.slice(-coeffsPerFrame)];
-          } else {
-            curFrame = nextFrame;
-          }
-        }
-      };
-
-      return function*() {
-        let itFrames = frames();
-        let frame;
-        let iFrame = 0;
-        for (;;) {
-          if (!frame || iFrame >= frameSize) {
-            let { value, done } = itFrames.next();
-            if (done) { return; }
-            frame = value;
-            iFrame = 0;
-          }
-          yield frame[iFrame++];
-        }
-      }();
-    } /* fromCoefficients */
-
     encode(signalInt16, opts={}) {
       let { coeffsPerFrame, frameSize } = this;
       let { verbose, type=Float64Array } = opts;
-      let nCoeffs = coeffsPerFrame + 
-        frameSize * Math.round((signalInt16.length+frameSize-1)/frameSize);
+      //let nCoeffs = coeffsPerFrame + 
+        //frameSize * Math.round((signalInt16.length+frameSize-1)/frameSize);
+      let nCoeffs = frameSize * Math.floor((signalInt16.length+frameSize-1)/frameSize);
       let coeffs = new type(nCoeffs);
       let iCoeff = 0;
-      for (let frame of this.encodeFrames(signalInt16)) {
-        for (let i = 0; i < frame.length; i++) {
-          coeffs[iCoeff + i] = frame[i];
+      for (let block of this.encodeFrames(signalInt16, opts)) {
+        for (let i = 0; i < block.length; i++) {
+          coeffs[iCoeff + i] = block[i];
         }
-        verbose && console.log(`encode${iCoeff}`, 
-          JSON.stringify([...frame]), JSON.stringify([...coeffs]) );
-        iCoeff += frame.length;
+        verbose && this.info(`encode@${iCoeff}`, 
+          [...coeffs].slice(iCoeff,iCoeff+block.length).map(v=>v.toFixed(2)).join(','));
+        iCoeff += block.length;
       };
       return coeffs;
     }
@@ -308,35 +247,48 @@
       let assertCoeffs = frameCoeffs=>{
         if (frameCoeffs.length) {
           let msg = [
-            `Mdct.decode() expected groups of ${coeffsPerFrame} coefficients.`,
+            `[E_MDCT_DECODE_GROUPS]`,
+            `Expected groups of ${coeffsPerFrame} coefficients.`,
             `Found: ${frameCoeffs.length}`
           ].join(' ');
-          throw new Error(msg);
+          throw that.error(msg);
         }
         return true;
       }
       let frames = function*() {
-        let nFrames = 0;
+        let nBlocks = 0;
         let itCoeffs = coeffs[Symbol.iterator]();
-        for (let nFrames=0;;) {
+        for (let nBlocks=0;;) {
           let frameCoeffs = [];
           for (let i=0; i< coeffsPerFrame; i++) {
             let { value, done } = itCoeffs.next();
-            verbose && console.log(`itCoeffs`, {value, done});
-            if (done && assertCoeffs(frameCoeffs)) { return; }
+            if (done && assertCoeffs(frameCoeffs)) { 
+              nBlocks++;
+              assert(curFrame.length === frameSize,
+                `[E_FRAMESIZE] Expected frameSize:${frameSize} actual:${curFrame.length}`);
+              for (let i=0; i<coeffsPerFrame; i++) {
+                curFrame[i+coeffsPerFrame] += zeros[i];
+              }
+              if (nBlocks%2) {
+                verbose && that.info(`decode#1@${nBlocks} zeros =>`,
+                  [...curFrame].map(v=>v&&v.toFixed(2)||v).join(',') );
+                yield curFrame;
+              }
+              return; 
+            }
             frameCoeffs.push(value);
           }
           let nextFrame = that.decodeFrame(frameCoeffs, opts);
-          nFrames++;
-          verbose && console.log(`decode`, 
-            [...frameCoeffs].map(v=>v.toFixed(2)).join(', '), 
-            '=>',
-            nextFrame.join(', '));
+          nBlocks++;
           if (curFrame.length === frameSize) {
             for (let i=0; i<coeffsPerFrame; i++) {
               curFrame[i+coeffsPerFrame] += nextFrame[i];
             }
-            if (nFrames%2) {
+            verbose && that.info(`decode#1@${nBlocks}`, 
+              [...frameCoeffs].map(v=>v.toFixed(2)).join(','), 
+              '=>',
+              curFrame.join(','));
+            if (nBlocks%2) {
               yield curFrame;
             }
             curFrame = [

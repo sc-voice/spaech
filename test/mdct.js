@@ -66,22 +66,22 @@
 
     let data2 = [ -2, -2, -2, -2, 1, 1, 1, 1 ];
     should.deepEqual(
-      [...mdct.encodeFrame(data2).map(v=>v.toFixed(3))], 
+      [...mdct.encodeFrame(data2)].map(v=>Number(v.toFixed(3))), 
       [ -0.119, -0.042, 0.028, 0.024, ]);
 
     let data4 = [ -16, -16, -16, -16, 15, 15, 15, 15 ];
     should.deepEqual(
-      [...mdct.encodeFrame(data4).map(v=>v.toFixed(3))], 
+      [...mdct.encodeFrame(data4)].map(v=>Number(v.toFixed(3))), 
       [ -1.787, -0.628, 0.419, 0.355, ]);
 
     let data8 = [ -128, -128, -128, -128, 127, 127, 127, 127 ];
     should.deepEqual(
-      [...mdct.encodeFrame(data8).map(v=>v.toFixed(3))], 
+      [...mdct.encodeFrame(data8)].map(v=>Number(v.toFixed(3))), 
       [-15.131, -5.313, 3.550, 3.010, ]);
 
     let data16 = [ -32768, -32768, -32768, -32768, 32767, 32767, 32767, 32767 ];
     should.deepEqual(
-      [...mdct.encodeFrame(data16).map(v=>v.toFixed(3))], 
+      [...mdct.encodeFrame(data16)].map(v=>Number(v.toFixed(3))), 
       [ -3903.881, -1370.861, 915.980, 776.530, ]);
   });
   it("encodeFrame(...) frameSize", ()=>{
@@ -124,204 +124,22 @@
     should.deepEqual(decode2a,[ 0, 0, 0, 0, -32768, -32768, -32768, -32768]);
     should.deepEqual(decode2b,             [ 0,  0,  0,  0, 32, 32, 32, 32]);
   });
-  it ("toCoefficients(...) => MDCT coefficients data[15]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ 
-      1, 2, 4, 8, 16, 32, 64, 128, 
-      256, 512, 1024, 2048, 4096, 8192, 16384, 
-    ];
-    let normalizedData = [...data];
-    while (normalizedData.length % frameSize) { normalizedData.push(0); }
-    normalizedData = [ 0, 0, 0, 0, ...normalizedData];
-    let mdct = new Mdct({frameSize});
-    let codeIterable = mdct.toCoefficients(data, {verbose});
-    should(typeof codeIterable[Symbol.iterator]).equal('function');
-    let encoded = [...codeIterable];
-
-    // Encoded data should be MDCT of overlapping frames
-    let iLastFrame = normalizedData.length - frameSize;
-    for (let iFrame=0; iFrame <= iLastFrame; iFrame += frameSize) {
-      let dataFrame = normalizedData.slice(iFrame, iFrame+frameSize);
-      verbose && console.log(`dataFrame`, dataFrame.join(', '));
-      should.deepEqual(encoded.slice(iFrame, iFrame+nCoeffs), 
-        [...mdct.encodeFrame(dataFrame)]);
-    }
-    verbose && console.log(`encoded`, encoded);
-  });
-  it ("toCoefficients(...) => MDCT coefficients data[16]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ 
-      1, 2, 4, 8, 16, 32, 64, 128, 
-      256, 512, 1024, 2048, 4096, 8192, 16384, 32767,
-    ];
-    let normalizedData = [...data];
-    while (normalizedData.length % frameSize) { normalizedData.push(0); }
-    normalizedData = [ 0, 0, 0, 0, ...normalizedData];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-
-    // Encoded data should be MDCT of overlapping frames
-    let iLastFrame = normalizedData.length - frameSize;
-    for (let iFrame=0; iFrame <= iLastFrame; iFrame += frameSize) {
-      let dataFrame = normalizedData.slice(iFrame, iFrame+frameSize);
-      verbose && console.log(`dataFrame`, dataFrame.join(', '));
-      should.deepEqual(
-        encoded.slice(iFrame, iFrame+nCoeffs), 
-        [...mdct.encodeFrame(dataFrame)]);
-    }
-  });
-  it ("toCoefficients(...) => MDCT coefficients data[17]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let data = [ 
-      1, 2, 4, 8, 16, 32, 64, 128, 
-      256, 512, 1024, 2048, 4096, 8192, 16384, 32767,
-      -12345, 
-    ];
-    let verbose = 0;
-    let normalizedData = [...data];
-    while (normalizedData.length % frameSize) { normalizedData.push(0); }
-    normalizedData = [ 0, 0, 0, 0, ...normalizedData];
-
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose} )];
-
-    // Encoded data should be MDCT of overlapping frames
-    let iLastFrame = normalizedData.length - frameSize;
-    for (let iFrame=0; iFrame <= iLastFrame; iFrame += frameSize) {
-      let dataFrame = normalizedData.slice(iFrame, iFrame+frameSize);
-      verbose && console.log(`dataFrame`, dataFrame.join(', '));
-      should.deepEqual(
-        encoded.slice(iFrame, iFrame+nCoeffs), 
-        [...mdct.encodeFrame(dataFrame)]);
-    }
-  });
-  it ("toCoefficients(...) => iterator", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 1;
-    let data = [ -10, -10, 10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = mdct.toCoefficients(data, {verbose});
-    should(typeof encoded.next).equal('function');
-  });
-  it ("fromCoefficients(...) => iterator", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, 10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = mdct.toCoefficients(data, {verbose});
-    let decoded = mdct.fromCoefficients(encoded, {verbose});
-    should(typeof decoded.next).equal('function');
-  });
   it ("encodeFrames(...) MDCT coefficients => data[1]", ()=>{
+    let verbose = 0;
     let frameSize = 8;
     let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, ];
+    let data = new Int16Array([ -10, 8, -4, 2, 0, 0, 0, 0 ]); // multiple of frameSize
     let mdct = new Mdct({frameSize});
-    let type = Float64Array;
-    let encoded = [...mdct.encodeFrames(data, {verbose, type})];
+    let type = Float32Array;
+    let encodedGen = mdct.encodeFrames(data, {verbose, type});
+    should(typeof encodedGen.next).equal('function');
+    let encoded = [...encodedGen];
+    should(encoded[0]).instanceOf(type);
+    let nFrames = Math.floor((data.length + frameSize-1)/frameSize);
+    let nCoeffBlocks = 2*nFrames;
+    should(encoded.length).equal(nCoeffBlocks);
     let decoded = [...mdct.decodeFrames(encoded, {verbose, type})];
-    should.deepEqual(decoded[0], [...data, 0, -0, 0, 0, 0, 0, 0]);
-    verbose && encoded.forEach((e,i) => 
-      console.log(`encoded${i} data[${data.length}]:`, JSON.stringify(e))); 
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[1]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, ];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0, -0, 0, 0, 0, 0, 0]);
-    verbose && console.log(`encoded data[${data.length}]:`, 
-      JSON.stringify([...encoded]));
-    verbose && console.log(`decoded data[${data.length}]:`, 
-      JSON.stringify([...decoded]));
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[2]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0, 0, 0, 0, 0, 0]);
-    verbose && console.log(`decoded${data.length}:`, [...decoded]);
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[3]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0, 0, 0, 0, 0]);
-    verbose && console.log(`decoded${data.length}:`, [...decoded]);
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[4]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, 10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0, 0, 0, 0]);
-    verbose && console.log(`decoded${data.length}:`, [...decoded]);
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[5]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, 10, 10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0, 0, 0]);
-    verbose && console.log(`decoded${data.length}:`, [...decoded]);
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[7]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, 10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0]);
-    verbose && console.log(`decoded${data.length}:`, [...decoded]);
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[8]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, 10, 10, 10];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data]);
-    verbose && console.log(...decoded);
-  });
-  it ("fromCoefficients(...) MDCT coefficients => data[9]", ()=>{
-    let frameSize = 8;
-    let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, 10, 10, 10, 20];
-    let mdct = new Mdct({frameSize});
-    let encoded = [...mdct.toCoefficients(data, {verbose})];
-    let decoded = [...mdct.fromCoefficients(encoded, {verbose})];
-    should.deepEqual(decoded, [...data, 0, 0, 0, 0, 0, 0, 0]);
-    verbose && console.log(...decoded);
+    should.deepEqual(decoded, [[...data]]);
   });
   it ("decodeFrames(...) MDCT coefficients => data[1]", ()=>{
     let frameSize = 8;
@@ -377,68 +195,73 @@
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, ];
+    let data = [ -10,-10,-10,-10, 10,0,0,0, 
+      0, 0, 0, 0,  0, 0, 0, 0];
     let mdct = new Mdct({frameSize});
     let encoded = mdct.encodeFrames(data, {verbose});
     let decoded = [...mdct.decodeFrames(encoded, {verbose})];
     let zeros = new Int16Array(frameSize - (data.length%frameSize));
-    should.deepEqual(decoded, [ [...data.slice(0, frameSize), ...zeros] ]);
+    should.deepEqual(decoded, [ [...data.slice(0, frameSize) ], [...zeros] ]);
     verbose && console.log(...decoded);
   });
-  it ("decodeFrames(...) MDCT coefficients => data[7]", ()=>{
+  it ("TESTTESTdecodeFrames(...) MDCT coefficients => data[7]", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, 10, 10];
+    let data = [ -10, -10, -10, -10, 10, 10, 10, 0, 
+      0, 0, 0, 0,  0, 0, 0, 0];
     let mdct = new Mdct({frameSize});
     let encoded = mdct.encodeFrames(data, {verbose});
     let decoded = [...mdct.decodeFrames(encoded, {verbose})];
     let zeros = new Int16Array(frameSize - (data.length%frameSize));
-    should.deepEqual(decoded, [ [...data.slice(0, frameSize), ...zeros] ]);
+    should.deepEqual(decoded, [ [...data.slice(0, frameSize)], [...zeros] ]);
     verbose && console.log(...decoded);
   });
-  it ("decodeFrames(...) MDCT coefficients => data[8]", ()=>{
+  it ("TESTTESTdecodeFrames(...) MDCT coefficients => data[8]", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, 10, 10, 10];
+    let data = [ -10,-10,-10,-10, 10,10,10,10,
+      0, 0, 0, 0,  0, 0, 0, 0];
     let mdct = new Mdct({frameSize});
     let encoded = mdct.encodeFrames(data, {verbose});
     let decoded = [...mdct.decodeFrames(encoded, {verbose})];
-    should.deepEqual(decoded, [
-      data.slice(0, frameSize),
-    ]);
+    let zeros = new Int16Array(frameSize - (data.length%frameSize));
+    should.deepEqual(decoded, [ data.slice(0, frameSize), [...zeros], ]);
     verbose && console.log(...decoded);
   });
   it ("decodeFrames(...) MDCT coefficients => data[9]", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 0;
-    let data = [ -10, -10, -10, -10, 10, 10, 10, 10, 20];
+    let data = [ -10,-10,-10,-10, 10,10,10,10,
+      20,0,0,0,  0,0,0,0];
     let mdct = new Mdct({frameSize});
     let encoded = mdct.encodeFrames(data, {verbose});
     let decoded = [...mdct.decodeFrames(encoded, {verbose})];
     let zeros = new Int16Array(frameSize - (data.length%frameSize));
-    should.deepEqual(decoded, [
+    should.deepEqual(decoded.map(v=>v || 0), [
       data.slice(0, frameSize),
-      [...data.slice(frameSize), ...zeros],
+      data.slice(frameSize), 
     ]);
     verbose && console.log(...decoded);
   });
-  it ("decodeFrames(...) MDCT windowed coefficients => data[8]", ()=>{
+  it ("TESTTESTdecodeFrames(...) MDCT windowed coefficients => data[8]", ()=>{
     let frameSize = 8;
     let verbose = 0;
     should(Mdct.WINDOWS.length).equal(3);
     for (let window of Mdct.WINDOWS) {
       verbose && console.log(`window`, window.name);
       let nCoeffs = frameSize/2;
-      let data = [ -10, -10, -10, -10, 10, 10, -100, -100];
+      let data = [ -10,-10,-10,-10, 10,10,-100,-100,
+        20,0,0,0,  0,0,0,0];
       let mdct = new Mdct({frameSize, window});
       let encoded = mdct.encodeFrames(data, {verbose});
       let decoded = [...mdct.decodeFrames(encoded, {verbose})];
       verbose && console.log(`decoded`, JSON.stringify(decoded));
       should.deepEqual(decoded, [
         data.slice(0, frameSize),
+        data.slice(frameSize),
       ]);
     }
   });
@@ -449,30 +272,30 @@
     let nums = new Int8Array(gen);
     should(nums.buffer.byteLength).equal(5);
   });
-  it ("TESTTESTencode(...) MDCT coefficients => data[1]", ()=>{
+  it ("encode(...) coefficients same size as data", ()=>{
+    let verbose = 1;
     let frameSize = 8;
     let type = Float32Array;
     let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = new Int16Array([ -10, 0, 0, 0, 0, 0, 0, 0 ]).slice(0,4);
+    let data = [ -10, 8, -4, 2, 0, 0, 0, 0 ]; // multiple of frameSize
+    let i16 = new Int16Array(data); // multiple of frameSize
     let signalLength = data.length;
     let mdct = new Mdct({frameSize});
-    let encoded = mdct.encode(data, {verbose, type});
+    let encoded = mdct.encode(i16, {verbose, type});
     should(encoded.constructor).equal(Float32Array);
-    console.log(`encoded`, encoded);
     let zeros = new type(nCoeffs);
     should(encoded).instanceOf(type);
     let decoded = mdct.decode(encoded, {verbose, signalLength});
     should(decoded.length).equal(data.length);
-    should.deepEqual(decoded, data);
-    should(encoded.length).equal(frameSize+nCoeffs);
+    should.deepEqual([...decoded], data);
+    should(encoded.length).equal(data.length);
   });
   it ("encode/decode() EVAM_ME_SUTTAM", async()=>{
     let verbose = 1;
     let signal = await wavSamples(EVAM_ME_SUTTAM);
     for (let i=0; i<Mdct.WINDOWS.length; i++) {
       let window = Mdct.WINDOWS[i];
-      let frameSize = 256;
+      let frameSize = 192;
       let opts = {window};
       let nCoeffs = frameSize/2;
       let mdct = new Mdct({frameSize});
@@ -483,7 +306,7 @@
       let dataOut = mdct.decode(coeffs, opts);
       let msDecode = Date.now() - msStart;
       let padding = frameSize/2 + (frameSize-signal.length%frameSize);
-      should(dataOut.length).equal(signal.length+padding);
+      should(dataOut.length).equal(signal.length);
       let threshold = 5;
       let nzSig = signal.findIndex(v=>Math.abs(v) > threshold);
       let nzDataOut = dataOut.findIndex(v=>Math.abs(v) > threshold);
@@ -548,7 +371,7 @@
     should(window(6,N)).equal(sqrt05);
     should(window(7,N)).equal(sqrt05);
   });
-  it ("encode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
+  it ("TESTTESTencode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
     let verbose = 1;
     let dataIn = await wavSamples(EVAM_ME_SUTTAM);
     let window = Mdct.WINDOWS[1];
@@ -560,7 +383,7 @@
 
     // encode
     let coeffs = new Float32Array(mdct.encode(dataIn, opts));
-    should(coeffs.length).equal(55584);
+    should(coeffs.length).equal(dataIn.length);
     let stats = Signal.stats(coeffs);
     await fs.promises.writeFile(EVAM_ME_SUTTAM_MDCT, coeffs);
 
