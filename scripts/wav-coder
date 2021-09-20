@@ -9,35 +9,32 @@ const { WaveFile } = require('wavefile');
 const {
   Chart,
   AutoEncoder,
-  Mdct,
   Signal,
 } = require('../index');
 
 function help() {
     console.log(`
 NAME
-        coder - compress/expand audio 
+        wav-coder - auto-encode WAV audio 
 
 SYNOPSIS
-        coder [OPTIONS] 
-        coder --signal-in TRAIN_WAV --model-path MODEL_PATH --train
-        coder --signal-in SRC_WAV --model-path MODEL_PATH --signal-out DST_WAV
+        wav-coder [OPTIONS] 
+        wav-coder --signal-in TRAIN_WAV --model-path MODEL_PATH --train
+        wav-coder --signal-in SRC_WAV --model-path MODEL_PATH --signal-out DST_WAV
 
 DESCRIPTION
-        Transform audio signals with an auto-encoder neural net
+        Transform WAV audio signals with an auto-encoder neural net
         with snake activation layers (https://arxiv.org/pdf/2006.08195.pdf).
-        Auto-encoders are designed to compress their input, so an
-        auto-encoder can be used to compress and/or expand signals.
-        Essentially, the neural net itself has information about all
-        signals from a given source for which the net has been trained.
-        The compressed signal therefore does not need to transmit the
-        information in the neural net and can transfer far less information
-        for any signal from that source. Auto-encoders work best for
-        signals from a single, consistent source. For arbitrary signals
-        from arbitrary sources, they offer no advantage over existing
-        audio compression algorithms such as MP3. However, for signals
-        coming from a single, consistent source, they provide higher
-        compression ratios.
+        Auto-encoders are neural nets that compress/expand their input 
+        via a hidden layer smaller than the input/output layers.
+        WAV auto-encoders work best for signals from a single, 
+        consistent source. However, they offer no advantage over existing
+        audio compression algorithms such as MP3. 
+
+        In practice, WAV snake auto-encoders behave a bit like low-pass filters.
+        Their output signals are distorted but intelligible and are perceived
+        as lacking treble. In contrast, the residual signals are also intelligible 
+        but are perceived as lacking bass.
 
     -cl, --chart-lines N
         Number of lines used to chart worst signal mismatch (15)
@@ -86,12 +83,6 @@ DESCRIPTION
 
     -ll, --log-level
         Logging level: warn, error, [info], debug
-
-    -mi, --mdct-in WAV_FILE
-        Encode input signal as MDCT coefficients
-
-    -ms, --mdct-stats JSON_FILE
-        Save MDCT coefficient stats for input signal
 
     -mp, --model-path MODEL_FOLDER
     -mp, --model-path URL
@@ -159,10 +150,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.epochs = Number(requiredArg());
   } else if (arg === '-ie' || arg === '--initial-epoch') {
     cmdCfg.initialEpoch = Number(requiredArg());
-  } else if (arg === '-mi' || arg === '--mdct-in') {
-    cmdCfg.mdctIn = requiredArg();
-  } else if (arg === '-ms' || arg === '--mdct-stats') {
-    cmdCfg.mdctStatsPath = requiredArg();
   } else if (arg === '-mp' || arg === '--model-path') {
     cmdCfg.modelPath = requiredArg();
   } else if (arg === '-cl' || arg === '--chart-lines') {
@@ -199,34 +186,13 @@ async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
   return new Signal(wf.getSamples(false, Int16Array));
 }
 
-async function readSignal({signalIn, mdctIn, frameSize}) {
-  assert(signalIn || mdctIn, `Expected input signal path`);
+async function readSignal({signalIn, frameSize}) {
+  assert(signalI , `Expected input signal path`);
   if (signalIn) {
     if (signalIn.endsWith('.wav')) {
       return await wavSignal(signalIn);
-    } else if (signalIn.endsWith('.mdct')) {
-      let nodeBuf = await fs.promises.readFile(signalIn);
-      let f32 = new Float32Array(nodeBuf.buffer);
-      return new Signal(f32);
     } else {
-      throw logger.error(`E_FILE_TYPE`, `Expected WAV or MDCT file:${signalIn}`);
-    }
-  }
-  if (mdctIn) {
-    if (mdctIn.endsWith('.wav')) {
-      let wavSig = await wavSignal(mdctIn);
-      let window = Mdct.WINDOWS[1];
-      let opts = {window};
-      let mdct = new Mdct({frameSize});
-      let coeffs = new Float32Array(mdct.encode(wavSig.data, opts));
-      logger.info(`readSignal() encoded as MDCT coefficients: ${mdctIn}`);
-      return new Signal(coeffs);
-    } else if (mdctIn.endsWith('.mdct')) {
-      let nodeBuf = await fs.promises.readFile(mdctIn);
-      let f32 = new Float32Array(nodeBuf.buffer);
-      return new Signal(f32);
-    } else {
-      throw logger.error(`E_FILE_TYPE`, `Expected WAV or MDCT file:${mdctIn}`);
+      throw logger.error(`E_FILE_TYPE`, `Expected WAV file:${signalIn}`);
     }
   }
 }
@@ -256,8 +222,6 @@ function configuration(cfg=cmdCfg) {
     frameSize: 192,
     initialEpoch: 0,
     logLevel: 'info',
-    mdctIn: undefined,
-    mdctStatsPath: undefined,
     modelPath: undefined,
     scale: 16384,
     signalIn: undefined,
@@ -330,46 +294,28 @@ async function writeSignal(fpath, signal) {
   }
 }
 
-async function calcMdctStats(coeffs, frameSize, mdctStatsPath) {
-  assert(coeffs.constructor.name === 'Float32Array', 'Expected Float32Array');
-  assert(frameSize, `Expected frameSize`);
-  let stats = [];
-  for (let iCoeff = 0; iCoeff < frameSize; iCoeff++) {
-    let c = [];
-    for (let i = iCoeff; i < coeffs.length; i+=frameSize) {
-      c.push(coeffs[i]);
-    }
-    let cStats = Signal.stats(c);
-    cStats.coefficient = iCoeff;
-    stats.push(cStats);
-  }
-  await fs.promises.writeFile(mdctStatsPath, JSON.stringify(stats, null, '\t'));
-  return stats;
-}
-
 (async function() {
   let cfg = configuration(cmdCfg);
   let { 
-    frameSize,
-    modelPath, 
-    trainModel, 
-    residualOut,
-    scale,
-    threshold,
+    chartLines,
     dampen,
-    mdctIn,
-    mdctStatsPath,
-    signalIn, 
-    signalOut,
     epochs, 
+    frameSize,
     initialEpoch, 
     logEpoch, 
-    chartLines,
+    modelPath, 
+    residualOut,
+    scale,
+    signalIn, 
+    signalOut,
+    threshold,
     trainAttempts,
+    trainModel, 
+
   } = cfg;
   logger.info(script, argv.slice(2).join(' '), cfg);
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
-  let sigIn = await readSignal({signalIn, mdctIn, frameSize});
+  let sigIn = await readSignal({signalIn, frameSize});
   let { data:dataIn } = sigIn;
   logger.info(`signal in: ${dataIn.constructor.name}[${dataIn.length}]`);
 
@@ -381,8 +327,6 @@ async function calcMdctStats(coeffs, frameSize, mdctStatsPath) {
   modelPath && model.summary();
   let { splits, frames } = coder.frameSignal(sigIn, {threshold, dampen, scale});
   let statsSigIn = await coder.validateSignal(sigIn);
-
-  let mectStats = mdctStatsPath && await calcMdctStats(sigIn.data, frameSize, mdctStatsPath);
 
   // Train
   if (trainModel) {
@@ -420,19 +364,11 @@ async function calcMdctStats(coeffs, frameSize, mdctStatsPath) {
 
   let sigOut;
   if (signalOut) {
-    sigOut = sigOut || coder.transform(sigIn);
-    if (signalIn.endsWith('.mdct')) {
-      let { data: coeffs } = sigOut;
-      logger.info(`Creating signal from MDCT coefficients:`,
-        `${coeffs.constructor.name}[${coeffs.length}]`);
-      let mdct = new Mdct({frameSize});
-      let window = Mdct.WINDOWS[1];
-      let opts = {window};
-      let dataLength = coeffs.length; // TODO: use ACTUAL data length
-      let dataOut = mdct.decode(coeffs, opts).slice(0, dataLength);
-      console.log(`dataOut`, dataOut.constructor.name);
-      sigOut = new Signal(dataOut);
+    let opts = {
+      threshold,
+      scale,
     }
+    sigOut = sigOut || coder.transform(sigIn, opts);
     await writeSignal(signalOut, sigOut);
   }
 

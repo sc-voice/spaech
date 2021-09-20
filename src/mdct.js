@@ -123,32 +123,39 @@
       let that = this;
       let frameGenerator = function*() {
         let itSignal = new Int16Frames(itInt16, frameSize).frames();
-        let prevFrame = zeros;
-        for (let frame; prevFrame.length; ) {
-          if (prevFrame.length === coeffsPerFrame) {
+        let frameBuf = zeros;
+        for (let frame; frameBuf.length; ) {
+          if (frameBuf.length === coeffsPerFrame) {
             let { value, done } = itSignal.next();
             if (done) {  
-              frame = new Int16Array([...prevFrame, ...zeros]);
-              prevFrame = [];
+              frame = new Int16Array([...frameBuf, ...zeros]);
               verbose && that.info(`encodeFrames#3`, frame.join(','));
               if (frame.filter(v=>v).length !== 0) {
-                throw that.error(`[E_PAD_SIGNAL] Signal should end with ${coeffsPerFrame} zeros`);
+                that.info(`adding ${frameSize} trailing zeros`);
+                let coeffs = that.encodeFrame(frame, opts);
+                verbose && that.info(`encodeFrames#1`, frame.join(','), '=>', 
+                  [...coeffs].map(v=>v.toFixed(2)).join(','));
+                if (isNaN(coeffs[0])) { throw logger.error('NanPanic'); }
+                yield coeffs;
+                yield zeros;
               }
-              //yield that.encodeFrame(frame, opts);
+              frameBuf = [];
               break;
-            } else {
-              frame = new Int16Array([...prevFrame, ...value.slice(0, coeffsPerFrame)]);
-              prevFrame = value;
+            } else { // frameBuf is half-full
+              assert(frameBuf.length === coeffsPerFrame, 
+                `[E_FRAMELENGTH1] Unexpected frame length:${frameBuf.length}`);
+              frame = new Int16Array([...frameBuf, ...value.slice(0, coeffsPerFrame)]);
+              frameBuf = value;
               let coeffs = that.encodeFrame(frame, opts);
               verbose && that.info(`encodeFrames#1`, frame.join(','), '=>', 
                 [...coeffs].map(v=>v.toFixed(2)).join(','));
               yield coeffs;
             }
           } else {
-            assert(prevFrame.length === frameSize, 
-              `[E_FRAMELENGTH] Unexpected frame length:${prevFrame.length}`);
-            frame = prevFrame;
-            prevFrame = prevFrame.slice(coeffsPerFrame, frameSize);
+            assert(frameBuf.length === frameSize, 
+              `[E_FRAMELENGTH2] Unexpected frame length:${frameBuf.length}`);
+            frame = frameBuf;
+            frameBuf = frameBuf.slice(coeffsPerFrame, frameSize);
             let coeffs = that.encodeFrame(frame, opts);
             verbose && that.info(`encodeFrames#2`, frame.join(','), '=>',
               [...coeffs].map(v=>v.toFixed(2)).join(','));

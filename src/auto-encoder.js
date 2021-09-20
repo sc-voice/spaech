@@ -216,7 +216,10 @@
         let { start, length, nFrames, end } = splits[iSplit];
         for (let i = 0; i < nFrames; i++) {
           let dataStart = start + i*frameSize;
-          let frame = [...data.slice(dataStart, dataStart+frameSize)].map(v=>v/scale);
+          let frame = [...data.slice(dataStart, dataStart+frameSize)];
+          frame = scale instanceof Array
+            ? frame.map((v,i)=>v/scale[i])
+            : frame.map((v,i)=>v/scale);
           frames.push(frame);
         }
       }
@@ -237,20 +240,28 @@
       let splits = signal.split({threshold, dampen});
       let dataOut = Reflect.construct(typeOut, [ dataIn.length ]);
       let predict = transform === 'model' ? x=>model.predict(x) : x=>x;
+      let that = this;
 
       splits.forEach((split,i)=>{
         let { start, length } = split;
         let nFrames = Math.ceil(length/frameSize);
         let end = start + nFrames*frameSize;
-        logger.info(`transform word#${i+1}`, JSON.stringify({start, length}));
+        that.info(`transform word#${i+1}`, JSON.stringify({start, length}));
         for (let iFrame = start; iFrame < end; iFrame+=frameSize) {
           let frameIn = dataIn.subarray(iFrame,iFrame+frameSize);
-          let x = tf.tensor2d([[...frameIn].map(v=>v/scale)]);
-          let y = typeOut === Float32Array
-            ? predict(x).dataSync().map(v=>v*scale)
-            : predict(x).dataSync().map(v=>Math.round(v*scale));
-          let frameOut = y;
-          dataOut.set(frameOut, iFrame);
+          let y;
+          if (scale instanceof Array) {
+            let x = tf.tensor2d([[...frameIn].map((v,i)=>v/scale[i])]);
+            y = typeOut === Float32Array
+              ? predict(x).dataSync().map((v,i)=>v*scale[i])
+              : predict(x).dataSync().map((v,i)=>Math.round(v*scale[i]));
+          } else {
+            let x = tf.tensor2d([[...frameIn].map(v=>v/scale)]);
+            y = typeOut === Float32Array
+              ? predict(x).dataSync().map(v=>v*scale)
+              : predict(x).dataSync().map(v=>Math.round(v*scale));
+          }
+          dataOut.set(y, iFrame);
         }
       });
     
@@ -268,12 +279,15 @@
         loss = 'meanSquaredError',
         logEpoch = 10,
         metrics = ['mse'],
+        noiseAmplitude = 0,
         optimizer = tf.train.adam(),
         shuffle = true,
         signal,
         validationSplit = 0,
         verbose = 0,
-      } = args;
+     } = args;
+     let that = this;
+
      if (callbacks == null) {
         callbacks = {
           onEpochEnd: AutoEncoder.onEpochEnd(logEpoch),
@@ -288,6 +302,13 @@
       model.compile({optimizer, loss, metrics});
 
       let tx = tf.tensor2d(frames);
+      shuffle && tf.util.shuffle(tx);
+      if (noiseAmplitude) {
+        let noise = tf.mul(noiseAmplitude, tf.randomNormal([frames.length, frameSize]));
+        tx = tf.add(tx, noise);
+        tx = tf.clipByValue(tx, -1, 1);
+        that.info(`noiseAmplitude`, noiseAmplitude);
+      }
       return model.fit(tx, tx, Object.assign({}, args, {
         batchSize, 
         epochs, 

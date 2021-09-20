@@ -10,6 +10,7 @@
   this.timeout(10*1000);
 
   const EVAM_ME_SUTTAM = path.join(__dirname, 'data/evam-me-suttam.wav');
+  const KATAME_PANCA = path.join(__dirname, 'data/katame-panca.wav');
   const EVAM_ME_SUTTAM_MDCT = path.join(__dirname, 'data/evam-me-suttam.mdct');
   const EVAM_ME_SUTTAM_MDCT_WAV = path.join(__dirname, 'data/evam-me-suttam_mdct.wav');
   const AN9_20_4_3 = path.join(__dirname, 'data/an9.20_4.3.wav');
@@ -217,18 +218,35 @@
     should.deepEqual(decoded, [ [...data.slice(0, frameSize)], [...zeros] ]);
     verbose && console.log(...decoded);
   });
-  it ("TESTTESTdecodeFrames(...) MDCT coefficients => data[8]", ()=>{
+  it ("TESTTESTdecodeFrames(...) 3 blocks => 1 frame", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
-    let verbose = 0;
-    let data = [ -10,-10,-10,-10, 10,10,10,10,
-      0, 0, 0, 0,  0, 0, 0, 0];
+    let verbose = 1;
+    let frames = [
+      [-10,-10,-10,-10, 10,10,10,10,],
+      [-6,-6,-6,-6, 6,6,6,6,],
+      [-4, -4, -4, -4, 4, 4, 4, 4,],
+    ];
+    let data = [ ...frames[0], ...frames[1], ...frames[2] ];
     let mdct = new Mdct({frameSize});
-    let encoded = mdct.encodeFrames(data, {verbose});
-    let decoded = [...mdct.decodeFrames(encoded, {verbose})];
-    let zeros = new Int16Array(frameSize - (data.length%frameSize));
-    should.deepEqual(decoded, [ data.slice(0, frameSize), [...zeros], ]);
-    verbose && console.log(...decoded);
+    let encoded = [...mdct.encodeFrames(data, {verbose})];
+    verbose && console.log(`encoded`, 
+      encoded.map(f32 => [...f32].map(v=>Number(v.toFixed(2))).join(', ')));
+
+    // first frame uses 3 coefficient blocks
+    let decoded1 = [...mdct.decodeFrames([ encoded[0], encoded[1], encoded[2], ], {verbose})];
+    should.deepEqual(decoded1, [ frames[0] ]);
+    verbose && console.log(`decoded1`, decoded1.join(','));
+
+    // second frame uses 3 coefficient blocks (notice overlap of encoded[2]
+    let decoded2 = [...mdct.decodeFrames([ encoded[2], encoded[3], encoded[4], ], {verbose})];
+    should.deepEqual(decoded2, [ frames[1] ]);
+    verbose && console.log(`decoded2`, decoded2.join(','));
+
+    // third frame uses 3 coefficient blocks (notice overlap of encoded[4]
+    let decoded3 = [...mdct.decodeFrames([ encoded[4], encoded[5], ], {verbose})];
+    should.deepEqual(decoded3, [ frames[2] ]);
+    verbose && console.log(`decoded3`, decoded3.join(','));
   });
   it ("decodeFrames(...) MDCT coefficients => data[9]", ()=>{
     let frameSize = 8;
@@ -398,6 +416,36 @@
     let sigOut = new Signal(dataOut);
     let wavOut = sigOut.toWav();
     await fs.promises.writeFile(EVAM_ME_SUTTAM_MDCT_WAV, wavOut);
+  });
+  it ("TESTTESTencodeFrames(...) katame panca", async()=>{
+    let verbose = 0;
+    let data = await wavSamples(KATAME_PANCA);
+    should(data.length).equal(36864);
+    let frameSize = 192;
+    let nCoeffs = frameSize/2;
+    let zeroPad = 1;
+    let nFrames = Math.floor((data.length + frameSize-1)/frameSize)+zeroPad;
+    let nCoeffBlocks = 2*nFrames;
+    let type = Float32Array;
+    let mdct = new Mdct({frameSize});
+    let encodedGen = mdct.encodeFrames(data, {type});
+    should(typeof encodedGen.next).equal('function');
+    let encoded = [...encodedGen];
+    should(encoded.length).equal(nCoeffBlocks);
+    should(encoded[0]).instanceOf(type);
+    should(encoded.length).equal(nCoeffBlocks);
+    let decoded = [...mdct.decodeFrames(encoded, {type})];
+    for (let iData = 0; iData < data.length; iData += frameSize) {
+      try {
+        should(Signal.rmsErr(
+          decoded[iData/frameSize], 
+          [...data.slice(iData,iData+frameSize)]))
+        .below(0.6);
+      } catch(e) {
+        console.error(`iData: ${iData} frame:`, 1+iData/frameSize, `of ${nFrames}`,  e);
+        throw e;
+      }
+    }
   });
 
 })

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+LAYERS=5
+UNITS=9
+CODESIZE=12
+MODEL=test/models/an9.20_4.3-mdct-l${LAYERS}u${UNITS}c${CODESIZE}
+SCALE=test/data/an9.20_4.3-mdct-stats.json
+SIGNAL=test/data/an9.20_4.3.wav
+TRAIN="-tr -ta 3 -ep 100 -bs 512 -na 0.05"
+PLAY=evam-me-suttam
+
+echo $MODEL "$0"
+CMDTRAIN="scripts/mdct-coder -mp $MODEL -sc $SCALE -el $LAYERS -eu 0.$UNITS -cs $CODESIZE -si $SIGNAL $TRAIN $*"
+echo CMDTRAIN $CMDTRAIN
+$CMDTRAIN
+RC=$?
+echo "TRAINING => $RC"
+PLAY="-nodisp -autoexit -loglevel error -stats"
+if [ "$RC" == "0" ]; then
+  nice -20 ffplay $PLAY static/training-success.mp3
+  scripts/mdct-coder -mp $MODEL -sc $SCALE -si test/data/$PLAY.wav -so ~/Downloads/$PLAY-l$LAYERS.wav
+  nice -20 ffplay $PLAY ~/Downloads/$PLAY-l$LAYERS.wav
+else
+  nice -20 ffplay $PLAY static/training-failure.mp3
+fi
