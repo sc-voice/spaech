@@ -125,8 +125,8 @@
     should.deepEqual(decode2a,[ 0, 0, 0, 0, -32768, -32768, -32768, -32768]);
     should.deepEqual(decode2b,             [ 0,  0,  0,  0, 32, 32, 32, 32]);
   });
-  it ("encodeFrames(...) MDCT coefficients => data[1]", ()=>{
-    let verbose = 0;
+  it ("TESTTESTencodeFrames(...) MDCT coefficients => data[1]", ()=>{
+    let verbose = 1;
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let data = new Int16Array([ -10, 8, -4, 2, 0, 0, 0, 0 ]); // multiple of frameSize
@@ -137,7 +137,7 @@
     let encoded = [...encodedGen];
     should(encoded[0]).instanceOf(type);
     let nFrames = Math.floor((data.length + frameSize-1)/frameSize);
-    let nCoeffBlocks = 2*nFrames;
+    let nCoeffBlocks = 2*nFrames + 1;
     should(encoded.length).equal(nCoeffBlocks);
     let decoded = [...mdct.decodeFrames(encoded, {verbose, type})];
     should.deepEqual(decoded, [[...data]]);
@@ -205,7 +205,7 @@
     should.deepEqual(decoded, [ [...data.slice(0, frameSize) ], [...zeros] ]);
     verbose && console.log(...decoded);
   });
-  it ("TESTTESTdecodeFrames(...) MDCT coefficients => data[7]", ()=>{
+  it ("decodeFrames(...) MDCT coefficients => data[7]", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 0;
@@ -218,7 +218,7 @@
     should.deepEqual(decoded, [ [...data.slice(0, frameSize)], [...zeros] ]);
     verbose && console.log(...decoded);
   });
-  it ("TESTTESTdecodeFrames(...) 3 blocks => 1 frame", ()=>{
+  it ("decodeFrames(...) 3 blocks => 1 frame", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 1;
@@ -247,6 +247,8 @@
     let decoded3 = [...mdct.decodeFrames([ encoded[4], encoded[5], /*zeros*/ ], {verbose})];
     should.deepEqual(decoded3, [ frames[2] ]);
     verbose && console.log(`decoded3`, decoded3.join(','));
+
+    should(encoded.length).equal(frames.length * 2 + 1);
   });
   it ("decodeFrames(...) MDCT coefficients => data[9]", ()=>{
     let frameSize = 8;
@@ -264,7 +266,7 @@
     ]);
     verbose && console.log(...decoded);
   });
-  it ("TESTTESTdecodeFrames(...) MDCT windowed coefficients => data[8]", ()=>{
+  it ("decodeFrames(...) MDCT windowed coefficients => data[8]", ()=>{
     let frameSize = 8;
     let verbose = 0;
     should(Mdct.WINDOWS.length).equal(3);
@@ -389,15 +391,17 @@
     should(window(6,N)).equal(sqrt05);
     should(window(7,N)).equal(sqrt05);
   });
-  it ("TESTTESTencode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
-    let verbose = 1;
+  it ("encode/decode() coeffs EVAM_ME_SUTTAM", async()=>{
+    let verbose = 0;
     let dataIn = await wavSamples(EVAM_ME_SUTTAM);
     let window = Mdct.WINDOWS[1];
     let frameSize = 192;
     let opts = {window};
     let nCoeffs = frameSize/2;
     let mdct = new Mdct({frameSize});
+    let nFrames = dataIn.length / frameSize;
     should(dataIn.length).equal(55296);
+    should(nFrames).equal(288);
 
     // encode
     let coeffs = new Float32Array(mdct.encode(dataIn, opts));
@@ -417,7 +421,7 @@
     let wavOut = sigOut.toWav();
     await fs.promises.writeFile(EVAM_ME_SUTTAM_MDCT_WAV, wavOut);
   });
-  it ("TESTTESTencodeFrames(...) katame panca", async()=>{
+  it ("encodeFrames(...) katame panca", async()=>{
     let verbose = 0;
     let data = await wavSamples(KATAME_PANCA);
     should(data.length).equal(36864);
@@ -425,7 +429,7 @@
     let zeroPad = 1;
     let nFrames = Math.floor((data.length + frameSize-1)/frameSize);
     should(nFrames).equal(192);
-    let FINAL_ENCODING_BLOCK = 1;
+    let FINAL_ENCODING_BLOCK = 1; // required if signal ends with less than frameSize/2 zeros
     let nCoeffBlocks = 2*nFrames + FINAL_ENCODING_BLOCK;
     let type = Float32Array;
     let mdct = new Mdct({frameSize});
@@ -442,7 +446,7 @@
           [...data.slice(iData,iData+frameSize)]))
         .below(0.6);
       } catch(e) {
-        console.error(`iData: ${iData} frame:`, 1+iData/frameSize, `of ${nFrames}`,  e);
+        console.error(`iData:${iData} frame:${1+iData/frameSize}/${nFrames}`,  e);
         throw e;
       }
     }

@@ -130,11 +130,12 @@
             if (done) {  
               frame = new Int16Array([...frameBuf, ...zeros]);
               verbose && that.info(`encodeFrames#3`, frame.join(','));
-              let nonZeros = frame.filter(v=>v);
-              if (nonZeros.length) {
-                that.info(`Signal ends too abruptly with`,
-                  `${nonZeros.length}/${coeffsPerFrame} non-zero samples.`,
-                  `Emitting extra non-zero final coefficient block.`);
+              let nonZeros = frame.slice(0).filter(v=>v).length;
+              if (nonZeros < frameSize) {
+                that.info(
+                  `Emitting extra coefficient block for final signal frame with`,
+                  `${nonZeros}/${frameSize} non-zero samples.`,
+                  );
                 let coeffs = that.encodeFrame(frame, opts);
                 verbose && that.info(`encodeFrames#1`, frame.join(','), '=>', 
                   [...coeffs].map(v=>v.toFixed(2)).join(','));
