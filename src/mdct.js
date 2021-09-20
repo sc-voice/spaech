@@ -103,13 +103,13 @@
       return encoded;
     }
 
-    decodeFrame(int16Codes) {
+    decodeFrame(coeffBlock) {
       let { frameSize, dec_kn, coeffsPerFrame, scale } = this;
       let frame = [];
       for (let n=0; n < frameSize; n++) {
         let sum = 0;
         for (let k=0; k < coeffsPerFrame; k++) {
-          sum += int16Codes[k] * dec_kn[k][n];
+          sum += coeffBlock[k] * dec_kn[k][n];
         }
         frame.push(Math.round(sum));
       }
@@ -130,14 +130,16 @@
             if (done) {  
               frame = new Int16Array([...frameBuf, ...zeros]);
               verbose && that.info(`encodeFrames#3`, frame.join(','));
-              if (frame.filter(v=>v).length !== 0) {
-                that.info(`adding ${frameSize} trailing zeros`);
+              let nonZeros = frame.filter(v=>v);
+              if (nonZeros.length) {
+                that.info(`Signal ends too abruptly with`,
+                  `${nonZeros.length}/${coeffsPerFrame} non-zero samples.`,
+                  `Emitting extra non-zero final coefficient block.`);
                 let coeffs = that.encodeFrame(frame, opts);
                 verbose && that.info(`encodeFrames#1`, frame.join(','), '=>', 
                   [...coeffs].map(v=>v.toFixed(2)).join(','));
                 if (isNaN(coeffs[0])) { throw logger.error('NanPanic'); }
                 yield coeffs;
-                yield zeros;
               }
               frameBuf = [];
               break;
@@ -176,7 +178,7 @@
       let assertCoeffs = coeffs=>{
         if (coeffs.length) {
           throw that.error(
-            `Mdct.decodeFrames() expected groups of ${coeffsPerFrame} coefficients.`,
+            `Mdct.decodeFrames() expected blocks of ${coeffsPerFrame} coefficients.`,
             `Found: ${coeffs.length}`);
         }
         return true;

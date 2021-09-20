@@ -244,7 +244,7 @@
     verbose && console.log(`decoded2`, decoded2.join(','));
 
     // third frame uses 3 coefficient blocks (notice overlap of encoded[4]
-    let decoded3 = [...mdct.decodeFrames([ encoded[4], encoded[5], ], {verbose})];
+    let decoded3 = [...mdct.decodeFrames([ encoded[4], encoded[5], /*zeros*/ ], {verbose})];
     should.deepEqual(decoded3, [ frames[2] ]);
     verbose && console.log(`decoded3`, decoded3.join(','));
   });
@@ -422,16 +422,16 @@
     let data = await wavSamples(KATAME_PANCA);
     should(data.length).equal(36864);
     let frameSize = 192;
-    let nCoeffs = frameSize/2;
     let zeroPad = 1;
-    let nFrames = Math.floor((data.length + frameSize-1)/frameSize)+zeroPad;
-    let nCoeffBlocks = 2*nFrames;
+    let nFrames = Math.floor((data.length + frameSize-1)/frameSize);
+    should(nFrames).equal(192);
+    let FINAL_ENCODING_BLOCK = 1;
+    let nCoeffBlocks = 2*nFrames + FINAL_ENCODING_BLOCK;
     let type = Float32Array;
     let mdct = new Mdct({frameSize});
     let encodedGen = mdct.encodeFrames(data, {type});
     should(typeof encodedGen.next).equal('function');
     let encoded = [...encodedGen];
-    should(encoded.length).equal(nCoeffBlocks);
     should(encoded[0]).instanceOf(type);
     should(encoded.length).equal(nCoeffBlocks);
     let decoded = [...mdct.decodeFrames(encoded, {type})];
