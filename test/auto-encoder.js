@@ -22,12 +22,13 @@
     return Signal.fromWav(buf);
   }
 
-  it("default ctor", async()=>{
+  it("TESTTESTdefault ctor", async()=>{
     let coder = new AutoEncoder();
     let encoderLayers = 3;
     should(coder.encoderAlpha).equal(1.61803398875);
     should(coder.encoderLayers).equal(encoderLayers);
     should(coder.frameSize).equal(192);
+    should(coder.inputSize).equal(192);
     should(coder.encoderUnits.length).equal(encoderLayers);
     should(coder.decoderUnits.length).equal(encoderLayers);
   });

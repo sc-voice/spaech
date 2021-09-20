@@ -15,6 +15,7 @@
       let {
         model,
         frameSize = FRAME_SIZE,
+        inputSize,
         codeActivation = 'snake',
         codeSize = 96,
         encoderUnits=0.8,
@@ -24,7 +25,9 @@
         decoderAlpha,
       } = args;
 
-      encoderUnits = AutoEncoder.coderUnits(encoderUnits, frameSize, encoderLayers);
+      inputSize = inputSize || frameSize;
+
+      encoderUnits = AutoEncoder.coderUnits(encoderUnits, inputSize, encoderLayers);
       assert(Array.isArray(encoderUnits), "Expected Array for encoderUnits");
       encoderUnits = encoderUnits.map(v=>Math.round(v));
       decoderUnits = decoderUnits || [...encoderUnits].reverse();
@@ -34,7 +37,7 @@
         ? encoderAlpha 
         : [...encoderAlpha].reverse());
       Object.assign(this, {
-        frameSize, codeSize, codeActivation,
+        frameSize, inputSize, codeSize, codeActivation,
         encoderUnits, decoderUnits,
         encoderAlpha, decoderAlpha,
         encoderLayers,
@@ -91,17 +94,15 @@
       };
     }
 
-    static coderUnits(units, frameSize=FRAME_SIZE, nLayers=N_LAYERS) {
+    static coderUnits(units, inputSize=FRAME_SIZE, nLayers=N_LAYERS) {
       if (Array.isArray(units)) {
         return units;
       }
       let n = Number(units);
-      if (isNaN(n)) {
-        throw this.error('E_AE_UNITS', `Expected number or array of numbers for units:${units}`);
-      }
+      assert(!isNaN(n), `[E_AE_UNITS] Expected number or array of numbers for units:${units}`);
       let result = [];
       for (let i = 0; i < nLayers; i++) {
-        let v = i ? result[i-1]*units : frameSize;
+        let v = i ? result[i-1]*units : inputSize;
         result.push(Math.round(v));
       }
       return result;
@@ -270,12 +271,13 @@
 
 
     async train(args={}) {
-      let { model, frameSize, } = this;
+      let { model, inputSize} = this;
       let {
         batchSize = 128,
         callbacks,
         epochs = 100,
         frames,
+        inputs,
         loss = 'meanSquaredError',
         logEpoch = 10,
         metrics = ['mse'],
@@ -293,18 +295,24 @@
           onEpochEnd: AutoEncoder.onEpochEnd(logEpoch),
         }
       }
-      if (signal) {
-        assert(!frames, "frames must be omitted if signal is present");
-        frames = this.frameSignal(signal).frames;
+      if (inputs) {
+        assert(!frames, "frames must be omitted if inputs are provided");
+        assert(!signal, "signal must be omitted if inputs are provided");
       }
-      assert(frames, "Signal or frames are required");
+      if (signal) {
+        assert(!frames, "frames must be omitted if signal is provided");
+        assert(!inputs, "inputs must be omitted if signal is provided");
+        inputs = this.frameSignal(signal).frames;
+      }
+      inputs = inputs || frames;
+      assert(inputs, "One of signal, frames, or inputs is required");
 
       model.compile({optimizer, loss, metrics});
 
-      let tx = tf.tensor2d(frames);
+      let tx = tf.tensor2d(inputs);
       shuffle && tf.util.shuffle(tx);
       if (noiseAmplitude) {
-        let noise = tf.mul(noiseAmplitude, tf.randomNormal([frames.length, frameSize]));
+        let noise = tf.mul(noiseAmplitude, tf.randomNormal([inputs.length, inputSize]));
         tx = tf.add(tx, noise);
         tx = tf.clipByValue(tx, -1, 1);
         that.info(`noiseAmplitude`, noiseAmplitude);
