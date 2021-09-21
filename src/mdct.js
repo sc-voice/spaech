@@ -131,7 +131,7 @@
               frame = new Int16Array([...frameBuf, ...zeros]);
               verbose && that.info(`encodeFrames#3`, frame.join(','));
               let nonZeros = frame.slice(0).filter(v=>v).length;
-              if (nonZeros < frameSize) {
+              if (nonZeros && nonZeros < frameSize) {
                 that.info(
                   `Emitting extra coefficient block for final signal frame with`,
                   `${nonZeros}/${frameSize} non-zero samples.`,
@@ -227,8 +227,6 @@
     encode(signalInt16, opts={}) {
       let { coeffsPerFrame, frameSize } = this;
       let { verbose, type=Float64Array } = opts;
-      //let nCoeffs = coeffsPerFrame + 
-        //frameSize * Math.round((signalInt16.length+frameSize-1)/frameSize);
       let nCoeffs = frameSize * Math.floor((signalInt16.length+frameSize-1)/frameSize);
       let coeffs = new type(nCoeffs);
       let iCoeff = 0;
@@ -322,6 +320,46 @@
 
       return signal;
     } /* decode */
+
+    encodeTriBlocks(itInt16, opts={}) {
+      let {frameSize} = this;
+      let {verbose} = opts;
+      let nCoeffs = frameSize/2;
+      let that = this;
+      let itBlk = that.encodeFrames(itInt16, opts);
+      let zeros = new Float32Array(nCoeffs);
+      let triBlkGenerator = function*() {
+        let streaming = true;
+        let triBlk = new Float32Array(3*nCoeffs);
+        for (let nBlks = 0; streaming; ) {
+          let {value, done} = itBlk.next();
+          if (done) {
+            streaming = false;
+            if (nBlks === 2) {
+              verbose && that.info(`encodeTriBlocks()`,
+                `emitting final tri-block`);
+              nBlks++;
+            } else {
+              verbose && that.info(`encodeTriBlocks()`,
+                `discarding final tri-block (${nBlks}/3 full)`);
+            }
+          } else {
+            triBlk.set(value, nBlks * nCoeffs);
+            nBlks++;
+          }
+
+          if (nBlks >= 3) {
+            yield triBlk;
+            let newTriBlk = new Float32Array(3*nCoeffs);
+            newTriBlk.set(triBlk.subarray(2*nCoeffs), 0);
+            triBlk = newTriBlk;
+            nBlks = 1;
+          }
+        }
+      }
+      return triBlkGenerator();
+    }
+
   }
 
   module.exports = exports.Mdct = Mdct;

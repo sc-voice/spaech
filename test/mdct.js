@@ -129,7 +129,7 @@
     let verbose = 1;
     let frameSize = 8;
     let nCoeffs = frameSize/2;
-    let data = new Int16Array([ -10, 8, -4, 2, 0, 0, 0, 0 ]); // multiple of frameSize
+    let data = new Int16Array([ -10, 8, -4, 2, 0, 0, 0, 0 ]); // ends with zeros
     let mdct = new Mdct({frameSize});
     let type = Float32Array;
     let encodedGen = mdct.encodeFrames(data, {verbose, type});
@@ -137,7 +137,7 @@
     let encoded = [...encodedGen];
     should(encoded[0]).instanceOf(type);
     let nFrames = Math.floor((data.length + frameSize-1)/frameSize);
-    let nCoeffBlocks = 2*nFrames + 1;
+    let nCoeffBlocks = 2*nFrames;
     should(encoded.length).equal(nCoeffBlocks);
     let decoded = [...mdct.decodeFrames(encoded, {verbose, type})];
     should.deepEqual(decoded, [[...data]]);
@@ -218,7 +218,7 @@
     should.deepEqual(decoded, [ [...data.slice(0, frameSize)], [...zeros] ]);
     verbose && console.log(...decoded);
   });
-  it ("decodeFrames(...) 3 blocks => 1 frame", ()=>{
+  it ("encodeFrames/decodeFrames(...) 3 blocks => 1 frame", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 1;
@@ -244,11 +244,59 @@
     verbose && console.log(`decoded2`, decoded2.join(','));
 
     // third frame uses 3 coefficient blocks (notice overlap of encoded[4]
-    let decoded3 = [...mdct.decodeFrames([ encoded[4], encoded[5], /*zeros*/ ], {verbose})];
+    let decoded3 = [...mdct.decodeFrames([ encoded[4], encoded[5], encoded[6], ], {verbose})];
     should.deepEqual(decoded3, [ frames[2] ]);
     verbose && console.log(`decoded3`, decoded3.join(','));
 
     should(encoded.length).equal(frames.length * 2 + 1);
+  });
+  it ("encodeTriBlocks(...) 3 blocks => 1 frame", ()=>{
+    let frameSize = 8;
+    let nCoeffs = frameSize/2;
+    let verbose = 1;
+    let frames = [
+      [-10,-10,-10,-10, 10,10,10,10,],
+      [-6,-6,-6,-6, 6,6,6,6,],
+      [-4, -4, -4, -4, 4, 4, 4, 4,],
+    ];
+    let data = [ ...frames[0], ...frames[1], ...frames[2] ];
+    let mdct = new Mdct({frameSize});
+    let zeros = new Float32Array(nCoeffs);
+    let encoded = [...mdct.encodeFrames(data, {verbose:0})];
+    let triBlks = [...mdct.encodeTriBlocks(data, {verbose})];
+    verbose && console.log(`encoded`, 
+      encoded.map(f32 => [...f32].map(v=>Number(v.toFixed(1)))));
+    should(encoded.length).equal(7);
+    verbose && console.log(`triBlks`, 
+      triBlks.map(f32 => [...f32].map(v=>Number(v.toFixed(1)))));
+    should.deepEqual([...triBlks[0]], [...encoded[0], ...encoded[1], ...encoded[2]]);
+    should.deepEqual([...triBlks[1]], [...encoded[2], ...encoded[3], ...encoded[4]]);
+    should.deepEqual([...triBlks[2]], [...encoded[4], ...encoded[5], ...encoded[6]]);
+    should(triBlks.length).equal(3);
+  });
+  it ("TESTTESTencodeTriBlocks(...) 3 blocks => 1 frame (trailing zeros)", ()=>{
+    let frameSize = 8;
+    let nCoeffs = frameSize/2;
+    let verbose = 0;
+    let frames = [
+      [-10,-10,-10,-10, 10,10,10,10,],
+      [-6,-6,-6,-6, 6,6,6,6,],
+      [-4, -4, -4, -4, 0, 0, 0, 0,], // trailing zeros
+    ];
+    let data = [ ...frames[0], ...frames[1], ...frames[2] ];
+    let mdct = new Mdct({frameSize});
+    let zeros = new Float32Array(nCoeffs);
+    let encoded = [...mdct.encodeFrames(data, {verbose:0})];
+    let triBlks = [...mdct.encodeTriBlocks(data, {verbose})];
+    verbose && console.log(`encoded`, 
+      encoded.map(f32 => [...f32].map(v=>Number(v.toFixed(1)))));
+    should(encoded.length).equal(6);
+    verbose && console.log(`triBlks`, 
+      triBlks.map(f32 => [...f32].map(v=>Number(v.toFixed(1)))));
+    should.deepEqual([...triBlks[0]], [...encoded[0], ...encoded[1], ...encoded[2]]);
+    should.deepEqual([...triBlks[1]], [...encoded[2], ...encoded[3], ...encoded[4]]);
+    should.deepEqual([...triBlks[2]], [...encoded[4], ...encoded[5], ...zeros]);
+    should(triBlks.length).equal(3);
   });
   it ("decodeFrames(...) MDCT coefficients => data[9]", ()=>{
     let frameSize = 8;
