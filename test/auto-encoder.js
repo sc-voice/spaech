@@ -27,6 +27,7 @@
     let encoderLayers = 3;
     should(coder.encoderAlpha).equal(1.61803398875);
     should(coder.encoderLayers).equal(encoderLayers);
+    should(coder.decoderLayers).equal(encoderLayers);
     should(coder.frameSize).equal(192);
     should(coder.inputSize).equal(192);
     should(coder.encoderUnits.length).equal(encoderLayers);
@@ -39,10 +40,11 @@
     should.deepEqual(i16a.map(v=>v/10), new Int16Array([0,1,10]));
     should.deepEqual([...i16a].map(v=>v/10), [0.1,1,10]);
   });
-  it("modelConfiguration", async()=>{
+  it("TESTTESTmodelConfiguration", async()=>{
     let frameSize = 96;
     let codeSize = 6;
     let encoderLayers = 3;
+    let decoderLayers = 2;
     let alpha = 1.61803398875;  // Golden Ratio
     let alpha2 = alpha*alpha;
     let alpha3 = alpha*alpha*alpha;
@@ -50,7 +52,8 @@
     let encoderUnits = 0.7;
     let codeActivation = 'elu'; // code layer activation function
     let coder = new AutoEncoder({
-      frameSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
+      frameSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, decoderLayers,
+      codeActivation,
     });
     let { model } = coder;
     let config = AutoEncoder.modelConfiguration(coder.model);
@@ -59,10 +62,11 @@
       codeActivation,
       frameSize,
       encoderUnits: [ 96, 67, 47],
-      decoderUnits: [ 96, 67, 47].reverse(),
+      decoderUnits: [ 24, 96 ],
       encoderAlpha: [ alpha, alpha2, alpha3],
-      decoderAlpha: [ alpha3, alpha2, alpha],
+      decoderAlpha: [ alpha2, alpha],
       encoderLayers,
+      decoderLayers,
     });
   });
   it("frameSignal()", async()=>{

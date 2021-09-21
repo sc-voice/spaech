@@ -19,6 +19,7 @@
         codeActivation = 'snake',
         codeSize = 96,
         encoderUnits=0.8,
+        decoderLayers,
         encoderLayers=N_LAYERS,
         encoderAlpha=1.61803398875, // Golden Ratio is least resonant
         decoderUnits,
@@ -26,11 +27,19 @@
       } = args;
 
       inputSize = inputSize || frameSize;
+      decoderLayers = decoderLayers || encoderLayers;
 
-      encoderUnits = AutoEncoder.coderUnits(encoderUnits, inputSize, encoderLayers);
-      assert(Array.isArray(encoderUnits), "Expected Array for encoderUnits");
-      encoderUnits = encoderUnits.map(v=>Math.round(v));
-      decoderUnits = decoderUnits || [...encoderUnits].reverse();
+      this.encoderUnits = AutoEncoder.coderUnits(encoderUnits, inputSize, encoderLayers);
+      assert(Array.isArray(this.encoderUnits), "Expected Array for encoderUnits");
+      this.encoderUnits = this.encoderUnits.map(v=>Math.round(v));
+      if (decoderUnits == null) {
+        if (inputSize === frameSize && decoderLayers === encoderLayers) {
+          decoderUnits = [...this.encoderUnits].reverse();
+        } else {
+          let outputRatio = Math.pow(codeSize / frameSize, 1/decoderLayers);
+          decoderUnits = AutoEncoder.coderUnits(outputRatio, frameSize, decoderLayers).reverse();
+        }
+      }
       assert(Array.isArray(decoderUnits), "Expected Array for decoderUnits");
       decoderUnits = decoderUnits.map(v=>Math.round(v));
       decoderAlpha = decoderAlpha || (typeof encoderAlpha  === 'number' 
@@ -38,9 +47,9 @@
         : [...encoderAlpha].reverse());
       Object.assign(this, {
         frameSize, inputSize, codeSize, codeActivation,
-        encoderUnits, decoderUnits,
+        decoderUnits,
         encoderAlpha, decoderAlpha,
-        encoderLayers,
+        encoderLayers, decoderLayers,
       });
       Object.defineProperty(this, '_model', {
         writable: true,
@@ -80,6 +89,7 @@
         }
       });
 
+
       return {
         //threshold = 2,
         codeActivation,
@@ -88,6 +98,7 @@
         decoderUnits,
         encoderAlpha, 
         encoderLayers: encoderUnits.length, 
+        decoderLayers: decoderUnits.length,
         encoderUnits, 
         frameSize, 
 
