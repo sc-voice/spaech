@@ -42,6 +42,7 @@
   });
   it("TESTTESTmodelConfiguration", async()=>{
     let frameSize = 96;
+    let inputSize = 3*frameSize/2;
     let codeSize = 6;
     let encoderLayers = 3;
     let decoderLayers = 2;
@@ -52,7 +53,7 @@
     let encoderUnits = 0.7;
     let codeActivation = 'elu'; // code layer activation function
     let coder = new AutoEncoder({
-      frameSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, decoderLayers,
+      frameSize, inputSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, decoderLayers,
       codeActivation,
     });
     let { model } = coder;
@@ -61,7 +62,8 @@
       codeSize,
       codeActivation,
       frameSize,
-      encoderUnits: [ 96, 67, 47],
+      inputSize,
+      encoderUnits: [ 144, 101, 71 ],
       decoderUnits: [ 24, 96 ],
       encoderAlpha: [ alpha, alpha2, alpha3],
       decoderAlpha: [ alpha2, alpha],

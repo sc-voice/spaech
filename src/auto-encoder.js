@@ -60,6 +60,7 @@
     static modelConfiguration(model) {
       let { layers } = model;
       let frameSize;
+      let inputSize;
       let encoderUnits = [];
       let encoderAlpha = [];
       let decoderAlpha = [];
@@ -72,7 +73,7 @@
           .toLowerCase()
           .replace(/activation/,'');
         if (i === 0) {
-          frameSize = units;
+          inputSize = units;
           encoderUnits.push(units);
           encoderAlpha.push(alpha);
         } else if (units < layers[i-1].units) {
@@ -84,6 +85,7 @@
             encoderAlpha.push(alpha);
           }
         } else if (units > layers[i-1].units) {
+          frameSize = units;
           decoderUnits.push(units);
           decoderAlpha.push(alpha);
         }
@@ -101,6 +103,7 @@
         decoderLayers: decoderUnits.length,
         encoderUnits, 
         frameSize, 
+        inputSize,
 
       };
     }

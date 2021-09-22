@@ -30,7 +30,7 @@
       } else if (data instanceof Array) {
         return new Int16Array(data);
       } else {
-        throw this.error('E_SIG_INT16', 'cannot convert to Int16Array');
+        throw logger.error('E_SIG_INT16', 'cannot convert to Int16Array');
       }
     }
 
