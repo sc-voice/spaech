@@ -48,7 +48,7 @@
         ? encoderAlpha 
         : [...encoderAlpha].reverse());
       Object.assign(this, {
-        frameSize, inputSize, outputSize, codeSize, codeActivation,
+        inputSize, outputSize, codeSize, codeActivation,
         decoderUnits,
         encoderAlpha, decoderAlpha,
         encoderLayers, decoderLayers,
@@ -132,6 +132,11 @@
           logger.info(`Epoch${epoch}: `, JSON.stringify({val_mse, mse}));
         }
       }
+    }
+
+    get frameSize() {
+      this.warn("frameSize is deprecated. Use either inputSize or outputSize");
+      return this.outputSize;
     }
 
     get model() {
