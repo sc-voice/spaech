@@ -14,7 +14,8 @@
       logger.logInstance(this);
       let {
         model,
-        frameSize = FRAME_SIZE,
+        frameSize = FRAME_SIZE, // DEPRECATED
+        outputSize,
         inputSize,
         codeActivation = 'snake',
         codeSize = 96,
@@ -26,18 +27,19 @@
         decoderAlpha,
       } = args;
 
-      inputSize = inputSize || frameSize;
+      outputSize = outputSize || frameSize;
+      inputSize = inputSize || outputSize;
       decoderLayers = decoderLayers || encoderLayers;
 
       this.encoderUnits = AutoEncoder.coderUnits(encoderUnits, inputSize, encoderLayers);
       assert(Array.isArray(this.encoderUnits), "Expected Array for encoderUnits");
       this.encoderUnits = this.encoderUnits.map(v=>Math.round(v));
       if (decoderUnits == null) {
-        if (inputSize === frameSize && decoderLayers === encoderLayers) {
+        if (inputSize === outputSize && decoderLayers === encoderLayers) {
           decoderUnits = [...this.encoderUnits].reverse();
         } else {
-          let outputRatio = Math.pow(codeSize / frameSize, 1/decoderLayers);
-          decoderUnits = AutoEncoder.coderUnits(outputRatio, frameSize, decoderLayers).reverse();
+          let outputRatio = Math.pow(codeSize / outputSize, 1/decoderLayers);
+          decoderUnits = AutoEncoder.coderUnits(outputRatio, outputSize, decoderLayers).reverse();
         }
       }
       assert(Array.isArray(decoderUnits), "Expected Array for decoderUnits");
@@ -46,7 +48,7 @@
         ? encoderAlpha 
         : [...encoderAlpha].reverse());
       Object.assign(this, {
-        frameSize, inputSize, codeSize, codeActivation,
+        frameSize, inputSize, outputSize, codeSize, codeActivation,
         decoderUnits,
         encoderAlpha, decoderAlpha,
         encoderLayers, decoderLayers,
@@ -59,8 +61,8 @@
 
     static modelConfiguration(model) {
       let { layers } = model;
-      let frameSize;
       let inputSize;
+      let outputSize;
       let encoderUnits = [];
       let encoderAlpha = [];
       let decoderAlpha = [];
@@ -85,7 +87,7 @@
             encoderAlpha.push(alpha);
           }
         } else if (units > layers[i-1].units) {
-          frameSize = units;
+          outputSize = units;
           decoderUnits.push(units);
           decoderAlpha.push(alpha);
         }
@@ -102,8 +104,9 @@
         encoderLayers: encoderUnits.length, 
         decoderLayers: decoderUnits.length,
         encoderUnits, 
-        frameSize, 
+        frameSize: outputSize, 
         inputSize,
+        outputSize,
 
       };
     }
@@ -132,7 +135,7 @@
     }
 
     get model() {
-      let { _model: model, frameSize, codeSize, } = this;
+      let { _model: model, codeSize, } = this;
       if (model == null) {
         model = this._model = this.createModel();
       }
@@ -148,7 +151,8 @@
 
     createModel(args={}) {
       let { 
-        frameSize=this.frameSize, 
+        outputSize=this.outputSize, 
+        inputSize=this.inputSize,
         codeSize=this.codeSize, 
         encoderUnits=this.encoderUnits,
         decoderUnits=this.decoderUnits,
@@ -156,7 +160,7 @@
         encoderAlpha=this.encoderAlpha, 
         decoderAlpha=this.decoderAlpha,
       } = args;
-      let inputShape = [frameSize];
+      let inputShape = [inputSize];
       let model = tf.sequential();
 
       encoderUnits.forEach((units,i)=>{
@@ -188,7 +192,7 @@
           : decoderAlpha[i];
         let name = `decoder${i+1}_a${alpha.toFixed(2)}`;
         let opts = i === decoderUnits.length-1
-          ? {units, name, alpha, frameSize}
+          ? {units, name, alpha, outputSize}
           : {units, name, alpha, };
         return model.add(new Snake(opts));
       });
@@ -209,7 +213,7 @@
      * Scale signal and split it up into frames for each detected word.
      */
     frameSignal(signal, opts={}) {
-      let { frameSize, } = this;
+      let { inputSize, } = this;
       let { 
         threshold = 2,  // minimum signal that starts word
         dampen = 36,    // minium number of samples at or above threshold 
@@ -220,8 +224,8 @@
       // detect words
       let splits = signal.split({threshold, dampen}).map(split=>{
         let { start, length } = split;
-        let nFrames = Math.ceil(length/frameSize);
-        let end = start + nFrames*frameSize;
+        let nFrames = Math.ceil(length/inputSize);
+        let end = start + nFrames*inputSize;
         return { start, length, nFrames, end };
       });
 
@@ -230,8 +234,8 @@
       for (let iSplit = 0; iSplit < splits.length; iSplit++) {
         let { start, length, nFrames, end } = splits[iSplit];
         for (let i = 0; i < nFrames; i++) {
-          let dataStart = start + i*frameSize;
-          let frame = [...data.slice(dataStart, dataStart+frameSize)];
+          let dataStart = start + i*inputSize;
+          let frame = [...data.slice(dataStart, dataStart+inputSize)];
           frame = scale instanceof Array
             ? frame.map((v,i)=>v/scale[i])
             : frame.map((v,i)=>v/scale);
@@ -243,7 +247,7 @@
     }
 
     transform(signal, opts={}) {
-      let { frameSize, model } = this;
+      let { inputSize, outputSize, model } = this;
       let { data: dataIn } = signal;
       let { 
         threshold = 2,  // minimum signal that starts word
@@ -259,11 +263,11 @@
 
       splits.forEach((split,i)=>{
         let { start, length } = split;
-        let nFrames = Math.ceil(length/frameSize);
-        let end = start + nFrames*frameSize;
+        let nFrames = Math.ceil(length/inputSize);
+        let end = start + nFrames*inputSize;
         that.info(`transform word#${i+1}`, JSON.stringify({start, length}));
-        for (let iFrame = start; iFrame < end; iFrame+=frameSize) {
-          let frameIn = dataIn.subarray(iFrame,iFrame+frameSize);
+        for (let iFrame = start; iFrame < end; iFrame+=inputSize) {
+          let frameIn = dataIn.subarray(iFrame,iFrame+inputSize);
           let y;
           if (scale instanceof Array) {
             let x = tf.tensor2d([[...frameIn].map((v,i)=>v/scale[i])]);

@@ -43,6 +43,7 @@
   it("TESTTESTmodelConfiguration", async()=>{
     let frameSize = 96;
     let inputSize = 3*frameSize/2;
+    let outputSize = frameSize;
     let codeSize = 6;
     let encoderLayers = 3;
     let decoderLayers = 2;
@@ -63,6 +64,7 @@
       codeActivation,
       frameSize,
       inputSize,
+      outputSize,
       encoderUnits: [ 144, 101, 71 ],
       decoderUnits: [ 24, 96 ],
       encoderAlpha: [ alpha, alpha2, alpha3],
