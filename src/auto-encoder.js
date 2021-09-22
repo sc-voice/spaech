@@ -247,11 +247,12 @@
     }
 
     async validateSignal(signal, opts={}) {
-      let { model=this.model, } = opts;
-      let { frames } = AutoEncoder.frameSignal(signal, opts);
-      let x = tf.tensor2d(frames);
+      let { frames: outputData } = AutoEncoder.frameSignal(signal, opts);
+      let { model=this.model, inputData=outputData} = opts;
+      let x = tf.tensor2d(inputData);
+      let yExpected = tf.tensor2D(outputData);
       let y = await model.predict(x);
-      let mse = tf.metrics.meanSquaredError(x, y).dataSync();
+      let mse = tf.metrics.meanSquaredError(y, yExpected).dataSync();
       return Signal.stats(mse);
     }
 
