@@ -79,7 +79,7 @@
     let scale = 16384;
     let inputSize = 10;
     let coder = new AutoEncoder({inputSize, scale});
-    let { splits, frames } = await coder.frameSignal(signal, {scale});
+    let { splits, frames } = await AutoEncoder.frameSignal(signal, {scale, frameSize:inputSize});
 
     should.deepEqual(splits, [
       { start:  1293, length: 12855, nFrames: 1286, end: 14153 }, // evam
@@ -135,6 +135,7 @@
   });
   it("TESTTESTtrain() AN9_20_4_3_WAV", async()=>{
     let inputSize = 96;         // signal compression unit
+    let frameSize = inputSize;
     let batchSize = 512;
     let codeSize = 6;           // units in code layer
     let encoderLayers = 3;      // encoder/decoder layers
@@ -150,12 +151,12 @@
     let epochs = 5;            // more epochs will train better
     //let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
     let signal = await wavSignal(AN9_20_4_3_WAV); // longer samples will improve training
-    let { splits, frames } = coder.frameSignal(signal);
+    let { splits, frames } = AutoEncoder.frameSignal(signal, {frameSize});
     let res = await coder.train({frames, batchSize, epochs});
 
     // Test using completely different sound from same speaker
     let signalTest = await wavSignal(KATAME_PANCA_WAV);
-    let { frames:framesTest } = coder.frameSignal(signalTest);
+    let { frames:framesTest } = AutoEncoder.frameSignal(signalTest, {frameSize});
     let iTest = 32; // arbitrary frame from middle of the signal
     let xtest = tf.tensor2d(framesTest.slice(iTest,iTest+1));
     let { model } = coder;
@@ -178,6 +179,7 @@
   });
   it("TESTTESTgetWeights()", async()=>{
     let inputSize = 96;
+    let frameSize = inputSize;
     let codeSize = 6;           // units in code layer
     let encoderLayers = 3;            // encoder/decoder layers
     //let encoderAlpha = 0.10;    // snake harmonic alpha. I.e., [0.1, 0.2, 0.3, ...]
@@ -193,7 +195,7 @@
     let validationSplit = 0.5;  // 
     let epochs = 50;            // more epochs will train better
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
-    let { splits, frames } = coder.frameSignal(signal);
+    let { splits, frames } = AutoEncoder.frameSignal(signal, {frameSize});
     let res = await coder.train({frames, epochs, initialEpoch, validationSplit});
 
     let { model } = coder;

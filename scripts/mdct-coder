@@ -408,7 +408,7 @@ async function initializeScale(scale) {
     }
     model = coder.model;
     model.summary();
-    let { splits, frames } = coder.frameSignal(coeffsIn, {threshold, dampen, scale});
+    let { splits, frames } = AutoEncoder.frameSignal(coeffsIn, {threshold, frameSize, dampen, scale});
     let statsCoeffsIn = await coder.validateSignal(coeffsIn);
 
     if (trainModel) {

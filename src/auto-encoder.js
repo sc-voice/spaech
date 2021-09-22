@@ -63,6 +63,44 @@
       });
     }
 
+    /**
+     * Scale signal and split it up into frames for each detected word.
+     */
+    static frameSignal(signal, opts={}) {
+      let { 
+        frameSize,
+        threshold = 2,  // minimum signal that starts word
+        dampen = 36,    // minium number of samples at or above threshold 
+        scale = 16384,  // normalization to interval [0,1]
+      } = opts;
+      assert(frameSize, `[E_FRAMESIZE] frameSize is required`);
+      assert(signal instanceof Signal, 'signal must be a Signal');
+
+      // detect words
+      let splits = signal.split({threshold, dampen}).map(split=>{
+        let { start, length } = split;
+        let nFrames = Math.ceil(length/frameSize);
+        let end = start + nFrames*frameSize;
+        return { start, length, nFrames, end };
+      });
+
+      let { data } = signal;
+      let frames = [];
+      for (let iSplit = 0; iSplit < splits.length; iSplit++) {
+        let { start, length, nFrames, end } = splits[iSplit];
+        for (let i = 0; i < nFrames; i++) {
+          let dataStart = start + i*frameSize;
+          let frame = [...data.slice(dataStart, dataStart+frameSize)];
+          frame = scale instanceof Array
+            ? frame.map((v,i)=>v/scale[i])
+            : frame.map((v,i)=>v/scale);
+          frames.push(frame);
+        }
+      }
+
+      return {splits, frames};
+    }
+
     static modelConfiguration(model) {
       let { layers } = model;
       let inputSize;
@@ -210,48 +248,11 @@
 
     async validateSignal(signal, opts={}) {
       let { model=this.model, } = opts;
-      let { frames } = this.frameSignal(signal, opts);
+      let { frames } = AutoEncoder.frameSignal(signal, opts);
       let x = tf.tensor2d(frames);
       let y = await model.predict(x);
       let mse = tf.metrics.meanSquaredError(x, y).dataSync();
       return Signal.stats(mse);
-    }
-
-    /**
-     * Scale signal and split it up into frames for each detected word.
-     */
-    frameSignal(signal, opts={}) {
-      let { inputSize, } = this;
-      let { 
-        threshold = 2,  // minimum signal that starts word
-        dampen = 36,    // minium number of samples at or above threshold 
-        scale = 16384,  // normalization to interval [0,1]
-      } = opts;
-      assert(signal instanceof Signal, 'signal must be a Signal');
-
-      // detect words
-      let splits = signal.split({threshold, dampen}).map(split=>{
-        let { start, length } = split;
-        let nFrames = Math.ceil(length/inputSize);
-        let end = start + nFrames*inputSize;
-        return { start, length, nFrames, end };
-      });
-
-      let { data } = signal;
-      let frames = [];
-      for (let iSplit = 0; iSplit < splits.length; iSplit++) {
-        let { start, length, nFrames, end } = splits[iSplit];
-        for (let i = 0; i < nFrames; i++) {
-          let dataStart = start + i*inputSize;
-          let frame = [...data.slice(dataStart, dataStart+inputSize)];
-          frame = scale instanceof Array
-            ? frame.map((v,i)=>v/scale[i])
-            : frame.map((v,i)=>v/scale);
-          frames.push(frame);
-        }
-      }
-
-      return {splits, frames};
     }
 
     transform(signal, opts={}) {
