@@ -249,6 +249,7 @@ function configuration(cfg=cmdCfg) {
   }
 
   let inputSize = frameSize * 3 / 2;
+  let outputSize = frameSize;
 
   return Object.assign({}, {
     batchSize: 128,
@@ -264,6 +265,7 @@ function configuration(cfg=cmdCfg) {
     frameSize,
     initialEpoch: 0,
     inputSize,
+    outputSize,
     logLevel: 'info',
     mdctStatsPath: undefined,
     modelPath: undefined,

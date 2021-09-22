@@ -234,7 +234,7 @@ function normalizeUrl(urlOrPath) {
 }
 
 function configuration(cfg=cmdCfg) {
-  let { encoderUnits } = cfg;
+  let { encoderUnits, frameSize=192 } = cfg;
 
   if (encoderUnits != null) {
     if (/,/.test(encoderUnits)) {
@@ -254,7 +254,8 @@ function configuration(cfg=cmdCfg) {
     encoderLayers: 3,
     encoderUnits: 0.8,
     epochs: 100,
-    frameSize: 192,
+    frameSize,
+    inputSize: frameSize,
     initialEpoch: 0,
     logLevel: 'info',
     mdctStatsPath: undefined,

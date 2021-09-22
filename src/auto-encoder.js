@@ -14,7 +14,7 @@
       logger.logInstance(this);
       let {
         model,
-        frameSize = FRAME_SIZE, // DEPRECATED
+        frameSize, // DEPRECATED
         outputSize,
         inputSize,
         codeActivation = 'snake',
@@ -27,8 +27,12 @@
         decoderAlpha,
       } = args;
 
-      outputSize = outputSize || frameSize;
+      assert(frameSize == null, 
+        `[E_FRAMESIZE] frameSize is no longer supported. Use either inputSize or outputSize`);
+      outputSize = outputSize || inputSize;
       inputSize = inputSize || outputSize;
+      assert(outputSize && inputSize, 
+        `[E_INPUTSIZE_OUTPUTSIZE] outputSize and/or inputSize are required`);
       decoderLayers = decoderLayers || encoderLayers;
 
       this.encoderUnits = AutoEncoder.coderUnits(encoderUnits, inputSize, encoderLayers);
@@ -104,7 +108,6 @@
         encoderLayers: encoderUnits.length, 
         decoderLayers: decoderUnits.length,
         encoderUnits, 
-        frameSize: outputSize, 
         inputSize,
         outputSize,
 
@@ -135,8 +138,8 @@
     }
 
     get frameSize() {
-      this.warn("frameSize is deprecated. Use either inputSize or outputSize");
-      return this.outputSize;
+      throw this.error(`[E_FRAMESIZE]`,
+        `frameSize is no longer supported. Use either inputSize or outputSize`);
     }
 
     get model() {

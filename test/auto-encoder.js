@@ -23,13 +23,14 @@
   }
 
   it("TESTTESTdefault ctor", async()=>{
-    let coder = new AutoEncoder();
+    let inputSize = 192;
+    let coder = new AutoEncoder({inputSize});
     let encoderLayers = 3;
     should(coder.encoderAlpha).equal(1.61803398875);
     should(coder.encoderLayers).equal(encoderLayers);
     should(coder.decoderLayers).equal(encoderLayers);
-    should(coder.frameSize).equal(192);
     should(coder.inputSize).equal(192);
+    should(coder.outputSize).equal(192);
     should(coder.encoderUnits.length).equal(encoderLayers);
     should(coder.decoderUnits.length).equal(encoderLayers);
   });
@@ -54,7 +55,7 @@
     let encoderUnits = 0.7;
     let codeActivation = 'elu'; // code layer activation function
     let coder = new AutoEncoder({
-      frameSize, inputSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, decoderLayers,
+      inputSize, outputSize, codeSize, encoderUnits, encoderAlpha, encoderLayers, decoderLayers,
       codeActivation,
     });
     let { model } = coder;
@@ -62,7 +63,6 @@
     should.deepEqual(config, {
       codeSize,
       codeActivation,
-      frameSize,
       inputSize,
       outputSize,
       encoderUnits: [ 144, 101, 71 ],
@@ -73,12 +73,12 @@
       decoderLayers,
     });
   });
-  it("frameSignal()", async()=>{
+  it("TESTTESTframeSignal()", async()=>{
     let verbose = 1;
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 16384;
-    let frameSize = 10;
-    let coder = new AutoEncoder({frameSize, scale});
+    let inputSize = 10;
+    let coder = new AutoEncoder({inputSize, scale});
     let { splits, frames } = await coder.frameSignal(signal, {scale});
 
     should.deepEqual(splits, [
@@ -94,8 +94,8 @@
     splits.forEach(split=>{
       let iData = split.start;
       for (let i=0; i < split.nFrames; i++) {
-        should.deepEqual(frames[iFrame+i], data.slice(iData, iData+frameSize));
-        iData += frameSize;
+        should.deepEqual(frames[iFrame+i], data.slice(iData, iData+inputSize));
+        iData += inputSize;
         nFrames++;
       }
       iFrame += split.nFrames;
@@ -115,14 +115,14 @@
     should.deepEqual([...f32.map(v=>v/3)], [0.3333333432674408, 0.6666666865348816, 1]);
     should.deepEqual([...i16.map(v=>v/3)], [0, 0, 1]);  // Trunc
   });
-  it("transform(...)", async()=>{
+  it("TESTTESTtransform(...)", async()=>{
     let verbose = 1;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 10;
-    let frameSize;
+    let inputSize = 192;
     let threshold = 2;
     let dampen = 36;
-    let coder = new AutoEncoder({frameSize, scale});
+    let coder = new AutoEncoder({inputSize, scale});
     let transform = 'identity';
     let sigOut = await coder.transform(sigIn, {scale, transform});
     let splits = sigIn.split({threshold, dampen});
@@ -133,8 +133,8 @@
     }
     await fs.writeFileSync(EVAM_ME_SUTTAM_IDENTITY_WAV, sigOut.toWav());
   });
-  it("train() AN9_20_4_3_WAV", async()=>{
-    let frameSize = 96;         // signal compression unit
+  it("TESTTESTtrain() AN9_20_4_3_WAV", async()=>{
+    let inputSize = 96;         // signal compression unit
     let batchSize = 512;
     let codeSize = 6;           // units in code layer
     let encoderLayers = 3;      // encoder/decoder layers
@@ -145,7 +145,7 @@
 
     // Train on one set of sounds from a speaker
     let coder = new AutoEncoder({
-      frameSize, scale, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
+      inputSize, scale, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
     });
     let epochs = 5;            // more epochs will train better
     //let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
@@ -176,8 +176,8 @@
     should.deepEqual(AutoEncoder.coderUnits(.8, 100, 5 ), [100, 80, 64, 51, 41]);
     should.deepEqual(AutoEncoder.coderUnits(1, 100, 5 ), [100, 100, 100, 100, 100]);
   });
-  it("getWeights()", async()=>{
-    let frameSize = 96;         // signal compression unit
+  it("TESTTESTgetWeights()", async()=>{
+    let inputSize = 96;
     let codeSize = 6;           // units in code layer
     let encoderLayers = 3;            // encoder/decoder layers
     //let encoderAlpha = 0.10;    // snake harmonic alpha. I.e., [0.1, 0.2, 0.3, ...]
@@ -187,7 +187,7 @@
     let scale = 16384;          // signal normalization
     let codeActivation = 'elu'; // code layer activation function
     let coder = new AutoEncoder({
-      frameSize, scale, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
+      inputSize, scale, codeSize, encoderUnits, encoderAlpha, encoderLayers, codeActivation,
     });
     let initialEpoch = 1;       // for continued training
     let validationSplit = 0.5;  // 
