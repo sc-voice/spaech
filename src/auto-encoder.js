@@ -251,17 +251,15 @@
 
     async validateSignal(signal, opts={}) {
       try {
-        let { model=this.model, inputData, outputData} = opts;
-        if (outputData == null) {
+        let { model=this.model, inputs, outputs} = opts;
+        if (outputs == null) {
           let framed = AutoEncoder.frameSignal(signal, opts);
-          outputData = framed.frames;
+          outputs = framed.frames;
         }
-        let x = tf.tensor2d(inputData);
-        let yExpected = tf.tensor2d(outputData);
+        let x = tf.tensor2d(inputs);
+        let yExpected = tf.tensor2d(outputs);
         let y = await model.predict(x);
-        console.log('dbg3', {x, y, yExpected}, outputData.slice(-1)[0].length);
         let mse = tf.metrics.meanSquaredError(y, yExpected).dataSync();
-        console.log('dbg4');
         return Signal.stats(mse);
       } catch(e) {
         throw this.error(`[E_VALIDATE_SIGNAL]`, e.message);

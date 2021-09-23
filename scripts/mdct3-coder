@@ -24,12 +24,20 @@ SYNOPSIS
         mdct3-coder --signal-in SRC_WAV --model-path MODEL_PATH --signal-out DST_WAV
 
 DESCRIPTION
-        Transform audio signals into MDCT coefficients tri-blocks that are passed
-        through a snake activation (https://arxiv.org/pdf/2006.08195.pdf)
-        auto encoder. The MDCT3 auto-encoder is asymmetric, with 3 inputs for
-        every 2 outputs.  This 3:2 ratio characterizes the MDCT coefficient overlap
+        Autoencode audio signal with an asymmetric auto-encoder (AAN). AAN input
+        consists of tri-blocks of 3*frameSize/2 MDCT coefficients. AAN output
+        consists of audio signal frames with a default frameSize of 192.
+        The AAN relies on snake activations (https://arxiv.org/pdf/2006.08195.pdf)
+        to handle the periodicity inherent in audio signals.
+
+        The MDCT3 auto-encoder is asymmetric, with 3 inputs for every 2 outputs.  
+        This 3:2 ratio characterizes the MDCT coefficient overlap
         in that it takes 3 coefficient blocks to represent a single signal frame
-        that is the length of 2 coefficient blocks.
+        that is the length of 2 coefficient blocks. The asymmetry allows
+        the auto-encoder to use MDCT coefficient tri-blocks as recognizable features.
+        Each tri-block has a 1-to-1 mapping to the corresponding audio frame, so
+        the autoencoder is essentially still doing a 1-to-1 mapping, but from a
+        pre-transformed input space.
 
     -bs, --batch-size N
         Number of training examples in each batch (128)
@@ -197,21 +205,15 @@ async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
   return new Signal(wf.getSamples(false, Int16Array));
 }
 
-async function readMdct({signalIn, mdct}) {
+async function mdctTriBlocks({wavSig, mdct}) {
   let { frameSize } = mdct;
-  assert(signalIn, `Expected input signal path`);
-  if (signalIn.endsWith('.wav')) {
-    let wavSig = await wavSignal(signalIn);
-    let {data:sigIn} = wavSig;
-    logger.info(`readMdct() ${wavSig.data.length} samples`);
-    let window = Mdct.WINDOWS[1];
-    let mdct = new Mdct({frameSize});
-    let triBks = [...mdct.encodeTriBlocks(sigIn, {})];
-    logger.info(`readMdct() encoded as ${triBks.length} MDCT tri-blocks`); 
-    return triBks;
-  } else {
-    throw logger.error(`E_FILE_TYPE`, `Expected WAV file:${signalIn}`);
-  }
+  assert(wavSig, `Expected input WAV signal`);
+  let {data:sigIn} = wavSig;
+  logger.info(`wavSig() ${wavSig.data.length} samples`);
+  let window = Mdct.WINDOWS[1];
+  let triBks = [...mdct.encodeTriBlocks(sigIn, {})];
+  logger.info(`wavSig() encoded as ${triBks.length} MDCT tri-blocks`); 
+  return triBks;
 }
 
 function normalizeUrl(urlOrPath) {
@@ -305,13 +307,13 @@ async function loadModel(modelPath) {
   }
 }
 
-async function chartWorst({model, frames, stats, chartLines}) {
+async function chartWorst({model, inputs, outputs, stats, chartLines}) {
   let { iMax, max, avg }  = stats;
-  let xtest = tf.tensor2d(frames.slice(iMax,iMax+1));
+  let xtest = tf.tensor2d(inputs.slice(iMax,iMax+1));
   let ytest = await model.predict(xtest);
   let chart = new Chart();
   chart.plot({
-    data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
+    data: [[...ytest.dataSync()], outputs[iMax]], 
     title:`Worst frame:${iMax} mse:${max} mseAvg:${avg} 1:expected 2:actual`,
     lines: chartLines,
   });
@@ -386,14 +388,14 @@ async function initializeScale(scale) {
   let nCoeffs = frameSize/2;
   let mdct = new Mdct({frameSize});
   let wavSig = await wavSignal(signalIn);
-  let { frames:outputData } = AutoEncoder.frameSignal(wavSig, {frameSize, threshold, dampen});
-  let triBks = await readMdct({signalIn, mdct});
-  let nTriBks = triBks.length;
-  logger.info(`tri-blocks:${triBks.length}x${triBks[0].length}`,
-    `frames:${outputData.length}x${outputData[0].length}`,
+  let { frames:outputs } = AutoEncoder.frameSignal(wavSig, {frameSize, threshold, dampen});
+  let inputs = await mdctTriBlocks({wavSig, mdct});
+  let nTriBks = inputs.length;
+  logger.info(`tri-blocks:${inputs.length}x${inputs[0].length}`,
+    `frames:${outputs.length}x${outputs[0].length}`,
     `signalIn:${signalIn}`);
 
-  mdctStatsPath && await calcMdctStats(triBks, mdctStatsPath);
+  mdctStatsPath && await calcMdctStats(inputs, mdctStatsPath);
 
   scale = await initializeScale(scale);
 
@@ -406,11 +408,8 @@ async function initializeScale(scale) {
     model = coder.model;
     model.summary();
 
-    let statsCoeffsIn = await coder.validateSignal(wavSig, {
-      inputData:triBks, outputData, frameSize});
-    console.log('DEBUG', {statsCoeffsIn});
+    let statsCoeffsIn = await coder.validateSignal(wavSig, {inputs, outputs, frameSize});
 
-    process.exit(0); // TBD
 
     if (trainModel) {
       let save = 0;
@@ -419,7 +418,8 @@ async function initializeScale(scale) {
         let msStart = Date.now();
         let resTrained = trainModel && (await coder.train({
           batchSize,
-          inputs:frames, 
+          inputs,
+          outputs, 
           shuffle,
           epochs, 
           initialEpoch, 
@@ -427,9 +427,10 @@ async function initializeScale(scale) {
           logEpoch,
         }));
         let msElapsed = Date.now() - msStart;
-        var statsTrained = await coder.validateSignal(coeffsIn);
-        logger.debug(`trained stats`, statsTrained);
-        await chartWorst({model, frames, stats:statsTrained, chartLines});
+        //var statsTrained = await coder.validateSignal(wavSig);
+        var statsTrained = await coder.validateSignal(wavSig, {inputs, outputs, frameSize});
+        logger.info(`trained stats`, statsTrained);
+        await chartWorst({model, inputs, outputs, stats:statsTrained, chartLines});
         logger.debug(`current stats`, statsCoeffsIn);
         logger.info(`current mse:`, statsCoeffsIn.avg);
         logger.info(`trained mse: ${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
@@ -451,7 +452,7 @@ async function initializeScale(scale) {
       }
     } else if (modelPath) {
       logger.info(`no changes made to trained model`);
-      await chartWorst({model, frames, stats:statsCoeffsIn, chartLines});
+      await chartWorst({model, inputs, outputs, stats:statsCoeffsIn, chartLines});
     }
   }
 
