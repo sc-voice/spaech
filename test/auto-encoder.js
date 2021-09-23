@@ -174,7 +174,7 @@
     //let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
     let signal = await wavSignal(AN9_20_4_3_WAV); // longer samples will improve training
     let { splits, frames } = AutoEncoder.frameSignal(signal, {frameSize});
-    let res = await coder.train({frames, batchSize, epochs});
+    let res = await coder.train({inputs:frames, batchSize, epochs});
 
     // Test using completely different sound from same speaker
     let signalTest = await wavSignal(KATAME_PANCA_WAV);

@@ -316,7 +316,6 @@
         batchSize = 128,
         callbacks,
         epochs = 100,
-        frames,
         inputs,
         loss = 'meanSquaredError',
         logEpoch = 10,
@@ -325,27 +324,17 @@
         optimizer = tf.train.adam(),
         outputs,
         shuffle = true,
-        signal,
         validationSplit = 0,
         verbose = 0,
      } = args;
      let that = this;
-
-     assert(frames == null, `[E_FRAMES] use inputs`);
 
      if (callbacks == null) {
         callbacks = {
           onEpochEnd: AutoEncoder.onEpochEnd(logEpoch),
         }
       }
-      if (inputs) {
-        assert(!signal, "signal must be omitted if inputs are provided");
-      }
-      if (signal) {
-        assert(!inputs, "inputs must be omitted if signal is provided");
-        inputs = this.frameSignal(signal).frames;
-      }
-      assert(inputs, "One of signal, or inputs is required");
+      assert(inputs, "[E_INPUTS] inputs is required");
       outputs = outputs || inputs;
 
       model.compile({optimizer, loss, metrics});
@@ -365,7 +354,7 @@
         tx = tf.clipByValue(tx, -1, 1);
         that.info(`noiseAmplitude`, noiseAmplitude);
       }
-      return model.fit(tx, tx, Object.assign({}, args, {
+      return model.fit(tx, ty, Object.assign({}, args, {
         batchSize, 
         epochs, 
         shuffle, 
