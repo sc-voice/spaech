@@ -418,7 +418,7 @@ async function initializeScale(scale) {
         let msStart = Date.now();
         let resTrained = trainModel && (await coder.train({
           batchSize,
-          frames, 
+          inputs:frames, 
           shuffle,
           epochs, 
           initialEpoch, 

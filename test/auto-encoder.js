@@ -92,7 +92,7 @@
     should.deepEqual(frames, [[10,20,30,40], [50,60,70,0]]);
   });
   it("frameSignal()", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 16384;
     let inputSize = 10;
@@ -114,9 +114,9 @@
       let iData = split.start;
       for (let i=0; i < split.nFrames; i++) {
         let frame = frames[iFrame+i];
-        let datai = new Int16Array(frameSize);
-        datai.set(data.slice(iData, iData+inputSize));
-        should.deepEqual(frame, [...datai]);
+        let datai = data.slice(iData, iData+inputSize);
+        while (datai.length < frameSize) { datai.push(0); }
+        should.deepEqual(frame, datai);
         iData += inputSize;
         nFrames++;
       }
@@ -155,7 +155,7 @@
     }
     await fs.writeFileSync(EVAM_ME_SUTTAM_IDENTITY_WAV, sigOut.toWav());
   });
-  it("train() AN9_20_4_3_WAV", async()=>{
+  it("TESTTESTtrain() AN9_20_4_3_WAV", async()=>{
     let inputSize = 96;         // signal compression unit
     let frameSize = inputSize;
     let batchSize = 512;
@@ -199,7 +199,7 @@
     should.deepEqual(AutoEncoder.coderUnits(.8, 100, 5 ), [100, 80, 64, 51, 41]);
     should.deepEqual(AutoEncoder.coderUnits(1, 100, 5 ), [100, 100, 100, 100, 100]);
   });
-  it("getWeights()", async()=>{
+  it("TESTTESTgetWeights()", async()=>{
     let inputSize = 96;
     let frameSize = inputSize;
     let codeSize = 6;           // units in code layer
@@ -217,8 +217,15 @@
     let validationSplit = 0.5;  // 
     let epochs = 50;            // more epochs will train better
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV); // longer samples will improve training
-    let { splits, frames } = AutoEncoder.frameSignal(signal, {frameSize});
-    let res = await coder.train({frames, epochs, initialEpoch, validationSplit});
+    let opts = {frameSize, threshold:0, dampen:0, scale};
+    let { splits, frames } = AutoEncoder.frameSignal(signal, opts);
+    let inputs = frames;
+    let outputs = frames;
+    let iTest = 32; // arbitrary frame from middle of the signal
+    let xtest = tf.tensor2d(frames.slice(iTest,iTest+1));
+    // console.log(xtest.dataSync());
+
+    let res = await coder.train({inputs, outputs, epochs, initialEpoch, validationSplit});
 
     let { model } = coder;
     let model2 = coder.createModel();
@@ -233,8 +240,6 @@
     }
 
     // copied model is encodes/decodes signal
-    let iTest = 32; // arbitrary frame from middle of the signal
-    let xtest = tf.tensor2d(frames.slice(iTest,iTest+1));
     let ytest = await model2.predict(xtest);
     let chart = new Chart();
     chart.plot({

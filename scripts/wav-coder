@@ -339,7 +339,8 @@ async function writeSignal(fpath, signal) {
     for (let iTrain=1; !save && iTrain <= trainAttempts; iTrain++) {
       logger.info(`training model (attempt #${iTrain}/${trainAttempts})...`);
       let msStart = Date.now();
-      let resTrained = trainModel && (await coder.train({frames, epochs, initialEpoch, logEpoch}));
+      let inputs = frames;
+      let resTrained = trainModel && (await coder.train({inputs, epochs, initialEpoch, logEpoch}));
       let msElapsed = Date.now() - msStart;
       var statsTrained = await coder.validateSignal(sigIn);
       logger.debug(`trained stats`, statsTrained);

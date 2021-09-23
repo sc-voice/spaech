@@ -67,12 +67,14 @@
       let { 
         frameSize,
         threshold = 2,  // minimum signal that starts word
-        dampen = 36,    // minium number of samples at or above threshold 
+        dampen,         // minium number of samples at or above threshold 
         scale = 16384,  // normalization to interval [0,1]
-        type = Int16Array,
       } = opts;
       assert(frameSize, `[E_FRAMESIZE] frameSize is required`);
       assert(signal instanceof Signal, 'signal must be a Signal');
+      dampen = dampen == null 
+        ? (threshold ? 36 : 0) 
+        : dampen;
 
       // detect words
       let splits = signal.split({threshold, dampen}).map(split=>{
@@ -88,12 +90,14 @@
         let { start, length, nFrames, end } = splits[iSplit];
         for (let i = 0; i < nFrames; i++) {
           let dataStart = start + i*frameSize;
-          let frame = new type(frameSize);
-          frame.set(data.slice(dataStart, dataStart+frameSize));
+          let frame = [...data.slice(dataStart, dataStart+frameSize)]; // convert from TypedArray
+          while (frame.length < frameSize) {
+            frame.push(0);
+          }
           frame = scale instanceof Array
             ? frame.map((v,i)=>v/scale[i])
             : frame.map((v,i)=>v/scale);
-          frames.push([...frame]); // TODO: just return type
+          frames.push(frame); 
         }
       }
 
@@ -319,6 +323,7 @@
         metrics = ['mse'],
         noiseAmplitude = 0,
         optimizer = tf.train.adam(),
+        outputs,
         shuffle = true,
         signal,
         validationSplit = 0,
@@ -326,27 +331,34 @@
      } = args;
      let that = this;
 
+     assert(frames == null, `[E_FRAMES] use inputs`);
+
      if (callbacks == null) {
         callbacks = {
           onEpochEnd: AutoEncoder.onEpochEnd(logEpoch),
         }
       }
       if (inputs) {
-        assert(!frames, "frames must be omitted if inputs are provided");
         assert(!signal, "signal must be omitted if inputs are provided");
       }
       if (signal) {
-        assert(!frames, "frames must be omitted if signal is provided");
         assert(!inputs, "inputs must be omitted if signal is provided");
         inputs = this.frameSignal(signal).frames;
       }
-      inputs = inputs || frames;
-      assert(inputs, "One of signal, frames, or inputs is required");
+      assert(inputs, "One of signal, or inputs is required");
+      outputs = outputs || inputs;
 
       model.compile({optimizer, loss, metrics});
 
       let tx = tf.tensor2d(inputs);
-      shuffle && tf.util.shuffle(tx);
+      let ty;
+      if (inputs === outputs) {
+        ty = tx;
+        shuffle && tf.util.shuffle(tx);
+      } else {
+        ty = tf.tensor2d(outputs);
+        shuffle && tf.util.shuffleCombo(tx, ty);
+      }
       if (noiseAmplitude) {
         let noise = tf.mul(noiseAmplitude, tf.randomNormal([inputs.length, inputSize]));
         tx = tf.add(tx, noise);
