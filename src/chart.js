@@ -48,7 +48,7 @@
         min.toFixed(precision).length, 
         max.toFixed(precision).length);
       let lineLast = lines-1;
-      let line = (x)=> Math.round((max-x)*lineLast/range);
+      let line = (x)=> Math.round(range ? (max-x)*lineLast/range : lines/2);
       let yOfLine = (line)=> (line*min + (lineLast - line)*max)/lineLast; 
       let iy0 = line(0);
       output.forEach((ds,iy)=>{
@@ -89,7 +89,7 @@
       assert(!isNaN(max), `expected max for data`);
       assert(!isNaN(width), `expected width for data`);
       let output = [...new Array(lines)].map(e=>new Int8Array(width));
-      let line = (x)=> Math.round((max - x)*(lines - 1)/range);
+      let line = (x)=> Math.round(range ? (max - x)*(lines - 1)/range : lines/2);
       data.forEach((ds,id)=>{
         ds.forEach((d,ix)=>{
           let iy = line(d);

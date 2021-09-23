@@ -125,7 +125,7 @@
     should.deepEqual(decode2a,[ 0, 0, 0, 0, -32768, -32768, -32768, -32768]);
     should.deepEqual(decode2b,             [ 0,  0,  0,  0, 32, 32, 32, 32]);
   });
-  it ("TESTTESTencodeFrames(...) MDCT coefficients => data[1]", ()=>{
+  it ("encodeFrames(...) MDCT coefficients => data[1]", ()=>{
     let verbose = 1;
     let frameSize = 8;
     let nCoeffs = frameSize/2;
@@ -274,7 +274,7 @@
     should.deepEqual([...triBlks[2]], [...encoded[4], ...encoded[5], ...encoded[6]]);
     should(triBlks.length).equal(3);
   });
-  it ("TESTTESTencodeTriBlocks(...) 3 blocks => 1 frame (trailing zeros)", ()=>{
+  it ("encodeTriBlocks(...) 3 blocks => 1 frame (trailing zeros)", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let verbose = 0;

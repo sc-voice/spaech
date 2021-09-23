@@ -14,7 +14,6 @@
       logger.logInstance(this);
       let {
         model,
-        frameSize, // DEPRECATED
         outputSize,
         inputSize,
         codeActivation = 'snake',
@@ -27,8 +26,6 @@
         decoderAlpha,
       } = args;
 
-      assert(frameSize == null, 
-        `[E_FRAMESIZE] frameSize is no longer supported. Use either inputSize or outputSize`);
       outputSize = outputSize || inputSize;
       inputSize = inputSize || outputSize;
       assert(outputSize && inputSize, 
@@ -72,6 +69,7 @@
         threshold = 2,  // minimum signal that starts word
         dampen = 36,    // minium number of samples at or above threshold 
         scale = 16384,  // normalization to interval [0,1]
+        type = Int16Array,
       } = opts;
       assert(frameSize, `[E_FRAMESIZE] frameSize is required`);
       assert(signal instanceof Signal, 'signal must be a Signal');
@@ -90,11 +88,12 @@
         let { start, length, nFrames, end } = splits[iSplit];
         for (let i = 0; i < nFrames; i++) {
           let dataStart = start + i*frameSize;
-          let frame = [...data.slice(dataStart, dataStart+frameSize)];
+          let frame = new type(frameSize);
+          frame.set(data.slice(dataStart, dataStart+frameSize));
           frame = scale instanceof Array
             ? frame.map((v,i)=>v/scale[i])
             : frame.map((v,i)=>v/scale);
-          frames.push(frame);
+          frames.push([...frame]); // TODO: just return type
         }
       }
 
@@ -247,13 +246,22 @@
     }
 
     async validateSignal(signal, opts={}) {
-      let { frames: outputData } = AutoEncoder.frameSignal(signal, opts);
-      let { model=this.model, inputData=outputData} = opts;
-      let x = tf.tensor2d(inputData);
-      let yExpected = tf.tensor2D(outputData);
-      let y = await model.predict(x);
-      let mse = tf.metrics.meanSquaredError(y, yExpected).dataSync();
-      return Signal.stats(mse);
+      try {
+        let { model=this.model, inputData, outputData} = opts;
+        if (outputData == null) {
+          let framed = AutoEncoder.frameSignal(signal, opts);
+          outputData = framed.frames;
+        }
+        let x = tf.tensor2d(inputData);
+        let yExpected = tf.tensor2d(outputData);
+        let y = await model.predict(x);
+        console.log('dbg3', {x, y, yExpected}, outputData.slice(-1)[0].length);
+        let mse = tf.metrics.meanSquaredError(y, yExpected).dataSync();
+        console.log('dbg4');
+        return Signal.stats(mse);
+      } catch(e) {
+        throw this.error(`[E_VALIDATE_SIGNAL]`, e.message);
+      }
     }
 
     transform(signal, opts={}) {

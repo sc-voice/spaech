@@ -22,7 +22,7 @@
     return Signal.fromWav(buf);
   }
 
-  it("TESTTESTdefault ctor", async()=>{
+  it("default ctor", async()=>{
     let inputSize = 192;
     let coder = new AutoEncoder({inputSize});
     let encoderLayers = 3;
@@ -41,7 +41,7 @@
     should.deepEqual(i16a.map(v=>v/10), new Int16Array([0,1,10]));
     should.deepEqual([...i16a].map(v=>v/10), [0.1,1,10]);
   });
-  it("TESTTESTmodelConfiguration", async()=>{
+  it("modelConfiguration", async()=>{
     let frameSize = 96;
     let inputSize = 3*frameSize/2;
     let outputSize = frameSize;
@@ -73,11 +73,30 @@
       decoderLayers,
     });
   });
-  it("TESTTESTframeSignal()", async()=>{
+  it("frameSignal() ", async()=>{
+    let verbose = 1;
+    let frameSize = 4;
+    let scale = 0.1;
+    let data = [1,2,3,4,5,6,7];
+    let signal = new Signal(data);
+    let threshold = 0;
+    let dampen = 0;
+    let length = data.length;
+    let nFrames = Math.ceil(length / frameSize);
+    let opts = {frameSize, threshold, dampen, scale};
+    let {splits, frames} = await AutoEncoder.frameSignal(signal, opts);
+
+    should.deepEqual(splits, [
+      { start:  0, length, nFrames, end:nFrames*frameSize }, // evam
+    ]);
+    should.deepEqual(frames, [[10,20,30,40], [50,60,70,0]]);
+  });
+  it("frameSignal()", async()=>{
     let verbose = 1;
     let signal = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 16384;
     let inputSize = 10;
+    let frameSize = inputSize;
     let coder = new AutoEncoder({inputSize, scale});
     let { splits, frames } = await AutoEncoder.frameSignal(signal, {scale, frameSize:inputSize});
 
@@ -94,7 +113,10 @@
     splits.forEach(split=>{
       let iData = split.start;
       for (let i=0; i < split.nFrames; i++) {
-        should.deepEqual(frames[iFrame+i], data.slice(iData, iData+inputSize));
+        let frame = frames[iFrame+i];
+        let datai = new Int16Array(frameSize);
+        datai.set(data.slice(iData, iData+inputSize));
+        should.deepEqual(frame, [...datai]);
         iData += inputSize;
         nFrames++;
       }
@@ -115,7 +137,7 @@
     should.deepEqual([...f32.map(v=>v/3)], [0.3333333432674408, 0.6666666865348816, 1]);
     should.deepEqual([...i16.map(v=>v/3)], [0, 0, 1]);  // Trunc
   });
-  it("TESTTESTtransform(...)", async()=>{
+  it("transform(...)", async()=>{
     let verbose = 1;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
     let scale = 10;
@@ -133,7 +155,7 @@
     }
     await fs.writeFileSync(EVAM_ME_SUTTAM_IDENTITY_WAV, sigOut.toWav());
   });
-  it("TESTTESTtrain() AN9_20_4_3_WAV", async()=>{
+  it("train() AN9_20_4_3_WAV", async()=>{
     let inputSize = 96;         // signal compression unit
     let frameSize = inputSize;
     let batchSize = 512;
@@ -177,7 +199,7 @@
     should.deepEqual(AutoEncoder.coderUnits(.8, 100, 5 ), [100, 80, 64, 51, 41]);
     should.deepEqual(AutoEncoder.coderUnits(1, 100, 5 ), [100, 100, 100, 100, 100]);
   });
-  it("TESTTESTgetWeights()", async()=>{
+  it("getWeights()", async()=>{
     let inputSize = 96;
     let frameSize = inputSize;
     let codeSize = 6;           // units in code layer

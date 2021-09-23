@@ -72,15 +72,8 @@ DESCRIPTION
     -le, --log-epoch N
         Log training stats every every N epochs (10)
 
-    -fd, --frame-dampen N
-        Number of consecutive samples above threshold to mark 
-        start of frame (0)
-
     -fs, --frame-size
         Audio is encoded/decoded by consecutive frames of given size. (192)
-
-    -ft, --frame-threshold N
-        Absolute value of minium signal threshold that starts frame (2)
 
     -?, --help
         Print help
@@ -180,10 +173,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.codeSize = Number(requiredArg());
   } else if (arg === '-na' || arg === '--noise-amplitude') {
     cmdCfg.noiseAmplitude = Number(requiredArg());
-  } else if (arg === '-fd' || arg === '--frame-dampen') {
-    cmdCfg.dampen = Number(requiredArg());
-  } else if (arg === '-ft' || arg === '--frame-threshold') {
-    cmdCfg.threshold = Number(requiredArg());
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = Number(requiredArg());
   } else if (arg === '-ro' || arg === '--residual-out') {
@@ -255,7 +244,6 @@ function configuration(cfg=cmdCfg) {
     batchSize: 128,
     chartLines: 15,
     codeSize: 6,
-    dampen: 0,
     decoderUnits: undefined,
     encoderAlpha: 1.61803398875,
     encoderLayers: 3,
@@ -274,7 +262,6 @@ function configuration(cfg=cmdCfg) {
     shuffle: true,
     signalIn: undefined,
     signalOut: undefined,
-    threshold: 0,
     trainAttempts: 1,
     trainModel: false,
     verbose: false,
@@ -373,7 +360,6 @@ async function initializeScale(scale) {
   let { 
     batchSize,
     chartLines,
-    dampen,
     epochs, 
     frameSize,
     initialEpoch, 
@@ -387,7 +373,7 @@ async function initializeScale(scale) {
     shuffle,
     signalIn, 
     signalOut,
-    threshold,
+    threshold=0,
     trainAttempts,
     trainModel, 
 
@@ -398,9 +384,13 @@ async function initializeScale(scale) {
   let { coder, modelUrl, savedModel } = await loadModel(modelPath);
   let nCoeffs = frameSize/2;
   let mdct = new Mdct({frameSize});
+  let wavSig = await wavSignal(signalIn);
+  let { frames:outputData } = AutoEncoder.frameSignal(wavSig, {frameSize, threshold});
   let triBks = await readMdct({signalIn, mdct});
   let nTriBks = triBks.length;
-  logger.info(`signalIn MDCT tri-blocks: ${triBks.length}`);
+  logger.info(`tri-blocks:${triBks.length}x${triBks[0].length}`,
+    `frames:${outputData.length}x${outputData[0].length}`,
+    `signalIn:${signalIn}`);
 
   mdctStatsPath && await calcMdctStats(triBks, mdctStatsPath);
 
@@ -415,7 +405,9 @@ async function initializeScale(scale) {
     model = coder.model;
     model.summary();
 
-    let statsCoeffsIn = await coder.validateSignal(coeffsIn);
+    let statsCoeffsIn = await coder.validateSignal(wavSig, {
+      inputData:triBks, outputData, frameSize});
+    console.log('DEBUG', {statsCoeffsIn});
 
     process.exit(0); // TBD
 
