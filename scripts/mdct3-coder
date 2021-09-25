@@ -102,10 +102,13 @@ DESCRIPTION
     -ro, --residual-out WAV_FILE
         Output residual of signal minus tranformed signal.
         
-    -sc, --scale SCALE
-    -sc, --scale JSON_FILE
+    -scm, --scale-mdct SCALE
+    -scm, --scale-mdct JSON_FILE
         MDCT coefficient normalization to [-1,1] interval. (512)
         If a JSON file is given, the scale array is read from the file.
+
+    -sc, --scale SCALE
+        Output audio signal scale (16384)
 
     -si, --signal-in WAV_FILE
         Input signal
@@ -143,6 +146,13 @@ for (var i = 2; i < nargs; i++) {
     }
     return nextArg;
   }
+  let requiredNumber = ()=>{
+    let n = Number(requiredArg());
+    if (isNaN(n)) {
+      throw logger.error(`[E_NUMBER] "${argv[i-1]}" option requires a number:${argv[i]}`);
+    }
+    return n;
+  }
   if (i<2) { continue; }
   if (arg === '-?' || arg === '--help') {
     help();
@@ -152,37 +162,39 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.encoderAlpha = requiredArg().split(',').map(v=>Number(v));
     if (cmdCfg.encoderAlpha.length === 1) { cmdCfg.encoderAlpha = cmdCfg.encoderAlpha[0]; }
   } else if (arg === '-le' || arg === '--log-epoch') {
-    cmdCfg.logEpoch = Number(requiredArg());
+    cmdCfg.logEpoch = requiredNumber();
   } else if (arg === '-dl' || arg === '--decoder-layers') {
-    cmdCfg.decoderLayers = Number(requiredArg());
+    cmdCfg.decoderLayers = requiredNumber();
   } else if (arg === '-el' || arg === '--encoder-layers') {
-    cmdCfg.encoderLayers = Number(requiredArg());
+    cmdCfg.encoderLayers = requiredNumber();
   } else if (arg === '-eu' || arg === '--encoder-units') {
     cmdCfg.encoderUnits = requiredArg();
+  } else if (arg === '-scm' || arg === '--scale-mdct') {
+    cmdCfg.scaleIn = requiredArg();
   } else if (arg === '-sc' || arg === '--scale') {
-    cmdCfg.scale = requiredArg();
+    cmdCfg.scaleOut = requiredNumber();
   } else if (arg === '-ns' || arg === '--no-shuffle') {
     cmdCfg.shuffle = false;
   } else if (arg === '-ep' || arg === '--epochs') {
-    cmdCfg.epochs = Number(requiredArg());
+    cmdCfg.epochs = requiredNumber();
   } else if (arg === '-ie' || arg === '--initial-epoch') {
-    cmdCfg.initialEpoch = Number(requiredArg());
+    cmdCfg.initialEpoch = requiredNumber();
   } else if (arg === '-ms' || arg === '--mdct-stats') {
     cmdCfg.mdctStatsPath = requiredArg();
   } else if (arg === '-mp' || arg === '--model-path') {
     cmdCfg.modelPath = requiredArg();
   } else if (arg === '-bs' || arg === '--batch-size') {
-    cmdCfg.batchSize = Number(requiredArg());
+    cmdCfg.batchSize = requiredNumber();
   } else if (arg === '-cl' || arg === '--chart-lines') {
-    cmdCfg.chartLines = Number(requiredArg());
+    cmdCfg.chartLines = requiredNumber();
   } else if (arg === '-ta' || arg === '--train-attempts') {
-    cmdCfg.trainAttempts = Number(requiredArg());
+    cmdCfg.trainAttempts = requiredNumber();
   } else if (arg === '-cs' || arg === '--code-size') {
-    cmdCfg.codeSize = Number(requiredArg());
+    cmdCfg.codeSize = requiredNumber();
   } else if (arg === '-na' || arg === '--noise-amplitude') {
-    cmdCfg.noiseAmplitude = Number(requiredArg());
+    cmdCfg.noiseAmplitude = requiredNumber();
   } else if (arg === '-fs' || arg === '--frame-size') {
-    cmdCfg.frameSize = Number(requiredArg());
+    cmdCfg.frameSize = requiredNumber();
   } else if (arg === '-ro' || arg === '--residual-out') {
     cmdCfg.residualOut = requiredArg();
   } else if (arg === '-si' || arg === '--signal-in') {
@@ -202,18 +214,29 @@ async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
   assert(fpath, `Expected signal file path`);
   let buf = await fs.promises.readFile(fpath);
   let wf = new WaveFile(buf);
-  return new Signal(wf.getSamples(false, Int16Array));
+  let wavSig = new Signal(wf.getSamples(false, Int16Array));
+  let stats = wavSig.stats();
+  logger.debug(`wavSignal`, fpath, stats);
+  logger.info(`wavSignal() ${fpath} =>`, `max: ${stats.max}`, `count: ${stats.count}`);
+
+  return wavSig;
 }
 
-async function mdctTriBlocks({wavSig, mdct}) {
+async function mdctTriBlocks({wavSig, mdct, scaleIn}) {
   let { frameSize } = mdct;
   assert(wavSig, `Expected input WAV signal`);
+  assert(scaleIn instanceof Array, `Expected scaleIn array`);
   let {data:sigIn} = wavSig;
-  logger.info(`wavSig() ${wavSig.data.length} samples`);
   let window = Mdct.WINDOWS[1];
   let triBks = [...mdct.encodeTriBlocks(sigIn, {})];
-  logger.info(`wavSig() encoded as ${triBks.length} MDCT tri-blocks`); 
-  return triBks;
+  let maxScaled = 0;
+  let inputs = triBks.map(tb=>tb.map((v,i)=>{
+    let vScaled = v/scaleIn[i];
+    if (maxScaled < vScaled) { maxScaled = vScaled }
+    return vScaled;
+  }));
+  logger.info(`mdctTriBlocks() tri-blocks: ${triBks.length}, maxScaled: ${maxScaled}`); 
+  return {triBks, inputs};
 }
 
 function normalizeUrl(urlOrPath) {
@@ -228,8 +251,8 @@ function normalizeUrl(urlOrPath) {
   return `file:////${url}`;
 }
 
-function configuration(cfg=cmdCfg) {
-  let { encoderUnits, decoderLayers, frameSize=192 } = cfg;
+async function configuration(cfg=cmdCfg) {
+  let { encoderUnits, decoderLayers, frameSize=192, scaleIn, scaleOut=16384 } = cfg;
 
   if (encoderUnits != null) {
     if (/,/.test(encoderUnits)) {
@@ -241,6 +264,7 @@ function configuration(cfg=cmdCfg) {
 
   let inputSize = frameSize * 3 / 2;
   let outputSize = frameSize;
+  scaleIn = await initializeScale(scaleIn);
 
   return Object.assign({}, {
     batchSize: 128,
@@ -259,8 +283,9 @@ function configuration(cfg=cmdCfg) {
     logLevel: 'info',
     mdctStatsPath: undefined,
     modelPath: undefined,
-    noiseAmplitude: 0.1,
-    scale: 512,
+    noiseAmplitude: 0.01,
+    scaleIn,
+    scaleOut,
     shuffle: true,
     signalIn: undefined,
     signalOut: undefined,
@@ -270,10 +295,12 @@ function configuration(cfg=cmdCfg) {
 
   }, cfg, {
     encoderUnits,
+    scaleIn,
+    scaleOut,
   });
 }
 
-async function loadModel(modelPath) {
+async function loadModel(modelPath, cfg) {
   if (modelPath == null) { return {}; }
   let modelUrl = normalizeUrl(modelPath);
   let coder;
@@ -281,9 +308,9 @@ async function loadModel(modelPath) {
   if (modelUrl) {
     try {
       savedModel = await tf.loadLayersModel(`${modelUrl}/model.json`);
-      logger.info(`loaded model:${modelUrl}`);
+      logger.info(`loadModel() found: ${modelUrl}`);
     } catch(e) { 
-      logger.info(`cannot load model:${modelUrl}`);
+      logger.info(`loadModel() not found: ${modelUrl}`);
     }
   }
   if (savedModel) {
@@ -298,7 +325,11 @@ async function loadModel(modelPath) {
       }
     });
     savedCfg.model = savedModel;
-    coder = new AutoEncoder(savedCfg);
+    coder = new AutoEncoder(Object.assign({}, cfg, savedCfg));
+    logger.debug(`loadModel() new model`, coder);
+  } else {
+    coder = new AutoEncoder(cfg);
+    logger.debug(`loadModel() existing model`, coder);
   }
   return {
     modelUrl,
@@ -324,7 +355,7 @@ async function writeSignal(fpath, signal) {
     let wav = signal.toWav();
     try {
       await fs.promises.writeFile(fpath, wav);
-      logger.info(`writing signal: ${fpath} (${wav.length})`);
+      logger.info(`writing signal: ${fpath} length: ${wav.length}`);
     } catch(e) {
       throw logger.error(`Could not write: ${fpath}`, e.message);
     }
@@ -350,15 +381,18 @@ async function initializeScale(scale) {
   if (typeof scale === 'string' && scale.endsWith('.json')) {
     let json = JSON.parse(await fs.promises.readFile(scale));
     scale = json.map(s=>Math.max(Math.abs(s.min),Math.abs(s.max)));
+    logger.info(`initializeScale() =>`, 
+      scale.map(v=>Number(v.toFixed(1))).slice(0,5).join(','), '...');
   } else {
     scale = Number(scale);
     assert(!isNaN(scale), `[E_SCALE_NAN] Scale must be a number`);
+    logger.info(`initializeScale() =>`, scale);
   }
   return scale;
 }
 
 (async function() {
-  let cfg = configuration(cmdCfg);
+  let cfg = await configuration(cmdCfg);
   let { 
     batchSize,
     chartLines,
@@ -372,7 +406,8 @@ async function initializeScale(scale) {
     modelPath, 
     noiseAmplitude,
     residualOut,
-    scale,
+    scaleIn,
+    scaleOut,
     shuffle,
     signalIn, 
     signalOut,
@@ -382,34 +417,28 @@ async function initializeScale(scale) {
 
   } = cfg;
   let commandResult = -1; //  not saved
-
-  logger.info(script, argv.slice(2).join(' '), cfg);
-  let { coder, modelUrl, savedModel } = await loadModel(modelPath);
+  logger.info(script, argv.slice(2).join(' '));
+  logger.debug(`command options parsed as`, cfg);
   let nCoeffs = frameSize/2;
   let mdct = new Mdct({frameSize});
   let wavSig = await wavSignal(signalIn);
-  let { frames:outputs } = AutoEncoder.frameSignal(wavSig, {frameSize, threshold, dampen});
-  let inputs = await mdctTriBlocks({wavSig, mdct});
-  let nTriBks = inputs.length;
-  logger.info(`tri-blocks:${inputs.length}x${inputs[0].length}`,
+  let { frames:outputs } = AutoEncoder.frameSignal(wavSig, 
+    {frameSize, threshold, dampen, scale:scaleOut});
+  let {triBks, inputs} = await mdctTriBlocks({wavSig, mdct, scaleIn});
+  let nTriBks = triBks.length;
+  logger.info(`tri-blocks:${triBks.length}x${triBks[0].length}`,
     `frames:${outputs.length}x${outputs[0].length}`,
     `signalIn:${signalIn}`);
-
-  mdctStatsPath && await calcMdctStats(inputs, mdctStatsPath);
-
-  scale = await initializeScale(scale);
+  mdctStatsPath && await calcMdctStats(triBks, mdctStatsPath);
+  let { coder, modelUrl, savedModel } = await loadModel(modelPath, cfg);
 
   let model;
   if (modelPath) {
-    if (coder == null) {
-      logger.info(`creating new AutoEncoder`);
-      coder = new AutoEncoder(cfg);
-    }
     model = coder.model;
     model.summary();
 
-    let statsCoeffsIn = await coder.validateSignal(wavSig, {inputs, outputs, frameSize});
-
+    let valOpts = {inputs, outputs, frameSize};
+    let statsCoeffsIn = await coder.validateSignal(wavSig, valOpts);
 
     if (trainModel) {
       let save = 0;
@@ -427,11 +456,10 @@ async function initializeScale(scale) {
           logEpoch,
         }));
         let msElapsed = Date.now() - msStart;
-        //var statsTrained = await coder.validateSignal(wavSig);
-        var statsTrained = await coder.validateSignal(wavSig, {inputs, outputs, frameSize});
-        logger.info(`trained stats`, statsTrained);
+        var statsTrained = await coder.validateSignal(wavSig, valOpts);
+        logger.info(`errors after training:`, statsTrained);
         await chartWorst({model, inputs, outputs, stats:statsTrained, chartLines});
-        logger.debug(`current stats`, statsCoeffsIn);
+        logger.debug(`errors before training`, statsCoeffsIn);
         logger.info(`current mse:`, statsCoeffsIn.avg);
         logger.info(`trained mse: ${statsTrained.avg} elapsed:${(msElapsed/1000).toFixed(2)}s`);
         if (savedModel !== model) {
@@ -458,7 +486,7 @@ async function initializeScale(scale) {
 
   let sigOut;
   if (signalOut && coder) {
-    sigOut = sigOut || coder.transform(coeffsIn, {threshold, scale});
+    sigOut = sigOut || coder.transform(coeffsIn, {threshold});
     let { data: coeffsOut } = sigOut;
     logger.info(`Creating signal from MDCT coefficients:`,
       `${coeffsOut.constructor.name}[${coeffsOut.length}]`);

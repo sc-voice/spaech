@@ -8,6 +8,7 @@
   const Chart = require('./chart');
   const FRAME_SIZE = 192;
   const N_LAYERS = 3;
+  const SCALE = 16384; // typical calm speaking voice amplitude (AN9.20_4.3.mp3)
 
   class AutoEncoder {
     constructor(args={}) {
@@ -24,7 +25,13 @@
         encoderAlpha=1.61803398875, // Golden Ratio is least resonant
         decoderUnits,
         decoderAlpha,
+        scale,
+        scaleIn,
+        scaleOut,
       } = args;
+
+      scaleIn = scaleIn || scale || SCALE;
+      scaleOut = scaleOut || scale || SCALE;
 
       outputSize = outputSize || inputSize;
       inputSize = inputSize || outputSize;
@@ -53,6 +60,7 @@
         decoderUnits,
         encoderAlpha, decoderAlpha,
         encoderLayers, decoderLayers,
+        scaleIn, scaleOut,
       });
       Object.defineProperty(this, '_model', {
         writable: true,
@@ -249,6 +257,17 @@
       return model;
     }
 
+    async predict(inputs, opts={}) {
+      assert(inputs, `[E_INPUTS_RQD] inputs required: ${inputs}`);
+      try {
+        let x = tf.tensor2d(inputs);
+        let y = await this.model.predict(x);
+        return y.data();
+      } catch(e) {
+        throw this.error(`[E_PREDICT]`, e.message);
+      }
+    }
+
     async validateSignal(signal, opts={}) {
       try {
         let { model=this.model, inputs, outputs} = opts;
@@ -272,7 +291,9 @@
       let { 
         threshold = 2,  // minimum signal that starts word
         dampen = 36,    // minium number of samples at or above threshold 
-        scale = 16384,  // normalization to interval [-1,1]
+        scale,          // normalization to interval [-1,1]
+        scaleIn,
+        scaleOut,
         transform = 'model',
         typeOut = dataIn.constructor,
       } = opts;
@@ -280,6 +301,10 @@
       let dataOut = Reflect.construct(typeOut, [ dataIn.length ]);
       let predict = transform === 'model' ? x=>model.predict(x) : x=>x;
       let that = this;
+      scaleIn = scaleIn || scale || this.scaleIn;
+      scaleOut = scaleOut || scale || this.scaleOut;
+      assert(scaleIn, `[E_SCALE_IN] required array or number: scaleIn`);
+      assert(scaleOut, `[E_SCALE_OUT] required array or number: scaleOut`);
 
       splits.forEach((split,i)=>{
         let { start, length } = split;
@@ -288,19 +313,25 @@
         that.info(`transform word#${i+1}`, JSON.stringify({start, length}));
         for (let iFrame = start; iFrame < end; iFrame+=inputSize) {
           let frameIn = dataIn.subarray(iFrame,iFrame+inputSize);
-          let y;
-          if (scale instanceof Array) {
-            let x = tf.tensor2d([[...frameIn].map((v,i)=>v/scale[i])]);
-            y = typeOut === Float32Array
-              ? predict(x).dataSync().map((v,i)=>v*scale[i])
-              : predict(x).dataSync().map((v,i)=>Math.round(v*scale[i]));
+          let x;
+          if (scaleIn instanceof Array) {
+            x = tf.tensor2d([[...frameIn].map((v,i)=>v/scaleIn[i])]);
           } else {
-            let x = tf.tensor2d([[...frameIn].map(v=>v/scale)]);
-            y = typeOut === Float32Array
-              ? predict(x).dataSync().map(v=>v*scale)
-              : predict(x).dataSync().map(v=>Math.round(v*scale));
+            x = tf.tensor2d([[...frameIn].map(v=>v/scaleIn)]);
           }
-          dataOut.set(y, iFrame);
+          let y = predict(x);
+          let yData = y.dataSync();
+          let floatOut = typeOut == Float32Array || typeOut === Float64Array || typeOut == Array;
+          if (scaleOut instanceof Array) {
+            yData = floatOut
+              ? yData.map((v,i)=>v*scaleOut[i])
+              : yData.map((v,i)=>Math.round(v*scaleOut[i]));
+          } else {
+            yData = floatOut
+              ? yData.map(v=>v*scaleOut)
+              : yData.map(v=>Math.round(v*scaleOut));
+          }
+          dataOut.set(yData, iFrame);
         }
       });
     

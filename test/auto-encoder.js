@@ -33,6 +33,8 @@
     should(coder.outputSize).equal(192);
     should(coder.encoderUnits.length).equal(encoderLayers);
     should(coder.decoderUnits.length).equal(encoderLayers);
+    should(coder.scaleIn).equal(16384);
+    should(coder.scaleOut).equal(16384);
   });
   it("Int16Array", ()=>{
     let i16a = new Int16Array([1,10,100]);
@@ -137,25 +139,29 @@
     should.deepEqual([...f32.map(v=>v/3)], [0.3333333432674408, 0.6666666865348816, 1]);
     should.deepEqual([...i16.map(v=>v/3)], [0, 0, 1]);  // Trunc
   });
-  it("transform(...)", async()=>{
+  it("TESTTESTtransform(...)", async()=>{
     let verbose = 1;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
-    let scale = 10;
+    const SCALE = 2;
+    let scaleIn = 2;
+    let scaleOut = scaleIn * SCALE;   // output amplitude is twice input
     let inputSize = 192;
     let threshold = 2;
     let dampen = 36;
-    let coder = new AutoEncoder({inputSize, scale});
+    let coder = new AutoEncoder({inputSize, scaleIn, scaleOut});
     let transform = 'identity';
-    let sigOut = await coder.transform(sigIn, {scale, transform});
+    let sigOut = await coder.transform(sigIn, {transform});
     let splits = sigIn.split({threshold, dampen});
     for (let i = 0; i < splits.length; i++) {
       let {start,length} = splits[i];
       let end = start+length;
-      should.deepEqual(sigIn.data.slice(start,end), sigOut.data.slice(start,end));
+      should.deepEqual(
+        sigIn.data.slice(start,end), 
+        sigOut.data.slice(start,end).map(v=>v/SCALE));
     }
     await fs.writeFileSync(EVAM_ME_SUTTAM_IDENTITY_WAV, sigOut.toWav());
   });
-  it("TESTTESTtrain() AN9_20_4_3_WAV", async()=>{
+  it("train() AN9_20_4_3_WAV", async()=>{
     let inputSize = 96;         // signal compression unit
     let frameSize = inputSize;
     let batchSize = 512;
@@ -222,34 +228,38 @@
     let inputs = frames;
     let outputs = frames;
     let iTest = 32; // arbitrary frame from middle of the signal
-    let xtest = tf.tensor2d(frames.slice(iTest,iTest+1));
+    let xdata = frames.slice(iTest,iTest+1);
+    let xtest = tf.tensor2d(xdata);
     // console.log(xtest.dataSync());
 
     let res = await coder.train({inputs, outputs, epochs, initialEpoch, validationSplit});
 
+    // Reconstruct AutoEncoder from model
     let { model } = coder;
     let model2 = coder.createModel();
+    let cfg2 = AutoEncoder.modelConfiguration(model);
+    cfg2.model = model2;
+    let coder2 = new AutoEncoder(cfg2);
     let layers2 = model2.layers;
-
-    // we can assign weights layer by layer
-    for (let i = 0; i < layers2.length; i++) {
+    for (let i = 0; i < layers2.length; i++) { // copy layer weights
       let layer2 = layers2[i];
       let layer1 = model.layers[i];
       let weights = layer1.getWeights();
       layer2.setWeights(weights);
     }
-
-    // copied model is encodes/decodes signal
-    let ytest = await model2.predict(xtest);
+    let ydata = await coder.predict(xdata);
+    let ydata2 = await coder2.predict(xdata);
     let chart = new Chart();
     chart.plot({
-      data: [[...xtest.dataSync()],[...ytest.dataSync()]], 
+      data: [[...xtest.dataSync()],[...ydata2]], 
       title:`Model2 signals 1:original 2:decoded`,
     });
+    model.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
     model2.summary(undefined, undefined, x=> !/___/.test(x) && console.log('Model', x));
-    let mse = tf.metrics.meanSquaredError(xtest, ytest);
+    let mse = tf.metrics.meanSquaredError(xtest, tf.tensor2d(ydata, [1,inputSize]));
+    let mse2 = tf.metrics.meanSquaredError(xtest, tf.tensor2d(ydata2, [1,inputSize]));
     console.log(`mse`, mse.dataSync());
-    
+    should.deepEqual(mse2.dataSync(), mse.dataSync());
   });
 
 })
