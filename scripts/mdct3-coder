@@ -125,6 +125,7 @@ DESCRIPTION
     -scm, --scale-mdct JSON_FILE
         MDCT coefficient normalization to [-1,1] interval. (512)
         If a JSON file is given, the scale array is read from the file.
+        (test/data/an9.20_4.3-mdct3-stats.json)
 
     -sc, --scale SCALE
         Output audio signal scale (16384)
@@ -282,7 +283,9 @@ function normalizeUrl(urlOrPath) {
 
 async function configuration(cfg=cmdCfg) {
   let { 
-    encoderUnits, decoderLayers, frameSize=192, scaleIn, scaleOut=16384,
+    encoderUnits, decoderLayers, frameSize=192, 
+    scaleIn=`test/data/an9.20_4.3-mdct3-stats.json`,
+    scaleOut=16384,
     signalIn, signalValidation,
   } = cfg;
 
@@ -298,7 +301,7 @@ async function configuration(cfg=cmdCfg) {
 
   let inputSize = frameSize * 3 / 2;
   let outputSize = frameSize;
-  scaleIn = await initializeScale(scaleIn);
+  scaleIn = await initializeScale(scaleIn, inputSize);
 
   return Object.assign({}, {
     batchSize: 128,
@@ -372,8 +375,21 @@ async function loadModel(modelPath, cfg) {
   }
 }
 
+function assertNumbers(inputs, msg) {
+  inputs.forEach((input,i)=> {
+    if (typeof input === 'number') {
+      assert(!isNaN(input), `${msg}[${i}]:${input}`);
+    } else {
+      let nans = input.reduce(((a,v)=> isNaN(v) ? a+1 : a), 0);
+      assert(!nans, `${msg}[${i}] has NaNs:`+
+        [...input].map(v=>isNaN(v)?'N':'.').join(''));
+    }
+  });
+}
+
 async function chartWorst({model, inputs, outputs, stats, chartLines}) {
   let { iMax, max, avg }  = stats;
+  assertNumbers(inputs, `[E_CHART_NAN] inputs`);
   let xtest = tf.tensor2d(inputs.slice(iMax,iMax+1));
   let ytest = await model.predict(xtest);
   let chart = new Chart();
@@ -411,12 +427,15 @@ async function calcMdctStats(triBks, mdctStatsPath) {
   return stats;
 }
 
-async function initializeScale(scale) {
+async function initializeScale(scale, inputSize) {
   if (typeof scale === 'string' && scale.endsWith('.json')) {
     let json = JSON.parse(await fs.promises.readFile(scale));
     scale = json.map(s=>Math.max(Math.abs(s.min),Math.abs(s.max)));
     logger.info(`initializeScale() =>`, 
       scale.map(v=>Number(v.toFixed(1))).slice(0,8).join(', '), '...');
+    assertNumbers(scale, `[E_SCALE_NAN] scale`);
+    assert(scale.length === inputSize, 
+      `[E_SCALE_SIZE] scale.length expected:${inputSize} actual:${scale.length}`);
   } else {
     scale = Number(scale);
     assert(!isNaN(scale), `[E_SCALE_NAN] Scale must be a number`);
@@ -536,10 +555,12 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
     : AutoEncoder.frameSignal(valSig, frameOpts).frames;
   let mdctTrain = await mdctTriBlocks({wavSig: trainSig, mdct, scaleIn});
   let {triBks, inputs} = mdctTrain;
+  assertNumbers(inputs, `[E_MDCTTRAIN_NAN] inputs`);
   let mdctVal = signalIn === signalValidation
     ? mdctTrain
     : (await mdctTriBlocks({wavSig: valSig, mdct, scaleIn}));
   let { inputs: inputsVal } = mdctVal;
+  assertNumbers(inputsVal, `[E_MDCTVAL_NAN] inputsVal`);
   logger.info(`tri-blocks:${triBks.length}x${triBks[0].length}`,
     `frames:${outputs.length}x${outputs[0].length}`,
     `signalIn:${signalIn}`);

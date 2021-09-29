@@ -31,7 +31,7 @@
       let data0 = data[0][0];
       let stats = data.reduce((ad,ds)=>{
         return ds.reduce((a,d,i) => {
-          assert(!isNaN(d), `Expected number: ${d} ds[${i}]`);
+          assert(!isNaN(d), `Expected number for ds[${i}]:${d}`);
           a.min = Math.min(d, a.min);
           a.max = Math.max(d, a.max);
           return a;

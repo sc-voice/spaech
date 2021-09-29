@@ -28,12 +28,12 @@ const SOUND_ADJUST = path.join(APP_DIR, 'static/training-adjust.mp3');
 function help() {
     console.log(`
 NAME
-        mdct3-coder - compress/expand MDCT tri-blocks to audio
+        denoiser - audio => audio denoiser
 
 SYNOPSIS
-        mdct3-coder [OPTIONS] 
-        mdct3-coder --signal-in TRAIN_WAV --model-path MODEL_PATH --train
-        mdct3-coder --signal-in SRC_WAV --model-path MODEL_PATH --signal-out DST_WAV
+        denoiser [OPTIONS] 
+        denoiser --signal-in TRAIN_WAV --model-path MODEL_PATH --train
+        denoiser -si TRAIN_WAV -sv VAL_WAV -mp MODEL_PATH -so XFM_VAL_WAV
 
 DESCRIPTION
         Autoencode audio signal with an asymmetric auto-encoder (AAN). AAN input
@@ -58,7 +58,7 @@ DESCRIPTION
         Number of lines used to chart worst signal mismatch (15)
 
     -cs, --code-size
-        Number of units in the bottleneck code layer.
+        Number of units in the bottleneck code layer (96)
 
     -dl, --decoder-layers N
         Number of decoder layers (encoderLayers)
@@ -71,7 +71,7 @@ DESCRIPTION
         Snake activation frequency coefficient. Either a list of alpha
         coefficients (one for each layer), or a single number. A single
         alpha number will be used to generate an alpha for each
-        encoder/decoder layer. The default is the Golden Ratio.
+        encoder/decoder layer. The default is the Golden Ratio. (1.61803398875)
 
     -el, --encoder-layers N
         Number of encoder/decoder layers (3)
@@ -110,7 +110,8 @@ DESCRIPTION
 
     -na, --noise-amplitude  N
     -nk, --noise-amplitude-k N_THOUSANDTH
-        Noise amplitude as a number [0..1] or a thousandth [0...999]
+        Initial noise amplitude as a number [0..1] or a thousandth [0...999]. Noise
+        amplitude is halved to lowest thousandth with each training failure (512/1000)
 
     -ns, --no-shuffle
         Do not shuffle training dataset (shuffle)
@@ -133,13 +134,12 @@ DESCRIPTION
         Validation signal (input signal)
 
     -so, --signal-out WAV_FILE
-        Output signal
+        Output file for transformed validation signal
 
-    -ta, --train-attempts N
-        Train code with up to N attempts to save a better model (1)
+    -tr, --train N
+        Train code with up to N attempts to save a better model.
+        If omitted, model is used as is without training. (0)
 
-    -tr, --train  
-        Train coder using input signal
 `);
     process.exit(0);
 }
@@ -212,7 +212,7 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.batchSize = requiredNumber();
   } else if (arg === '-cl' || arg === '--chart-lines') {
     cmdCfg.chartLines = requiredNumber();
-  } else if (arg === '-ta' || arg === '--train-attempts') {
+  } else if (arg === '-tr' || arg === '--train') {
     cmdCfg.trainAttempts = requiredNumber();
   } else if (arg === '-cs' || arg === '--code-size') {
     cmdCfg.codeSize = requiredNumber();
@@ -230,8 +230,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.signalIn = requiredArg();
   } else if (arg === '-so' || arg === '--signal-out') {
     cmdCfg.signalOut = requiredArg();
-  } else if (arg === '-tr' || arg === '--train') {
-    cmdCfg.trainModel = true;
   } else if (arg === '-ll' || arg === '--log-level') {
     cmdCfg.logLevel = logger.logLevel = requiredArg();
   } else {
@@ -303,7 +301,7 @@ async function configuration(cfg=cmdCfg) {
   return Object.assign({}, {
     batchSize: 128,
     chartLines: 15,
-    codeSize: 6,
+    codeSize: 96,
     decoderUnits: undefined,
     encoderAlpha: 1.61803398875,
     encoderLayers: 3,
@@ -317,14 +315,13 @@ async function configuration(cfg=cmdCfg) {
     logLevel: 'info',
     mdctStatsPath: undefined,
     modelPath: undefined,
-    noiseAmplitude: 0.01,
+    noiseAmplitude: 512/1000,
     scaleIn,
     scaleOut,
     shuffle: true,
     signalIn: undefined,
     signalOut: undefined,
-    trainAttempts: 1,
-    trainModel: false,
+    trainAttempts: 0,
     verbose: false,
 
   }, cfg, {
@@ -520,7 +517,6 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
     signalValidation,
     threshold=0,
     trainAttempts,
-    trainModel, 
 
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
@@ -556,7 +552,7 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
   let statsCurrent = await coder.validateSignal(valSig, valOpts);
   let sigOut;
 
-  if (trainModel) {
+  if (trainAttempts) {
     model.summary();
     let noise = noiseAmplitude;
     for (let iTrain=1; iTrain <= trainAttempts; iTrain++) {
