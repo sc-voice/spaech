@@ -120,26 +120,31 @@
       let encoderAlpha = [];
       let decoderAlpha = [];
       let decoderUnits = [];
-      let codeSize;
+      let iCode = Math.floor(layers.length/2);
       let codeActivation;
-      layers.forEach((layer,i)=> {
-        let { units, alpha } = layer;
+      layers.forEach((layer, i) => {
+        let { units } = layer;
         let activation = layer.activation.constructor.name
           .toLowerCase()
           .replace(/activation/,'');
+        if (units < layers[iCode].units) {
+          iCode = i;
+        }
+        if (iCode === i) {
+          codeActivation = activation;
+        }
+      });
+      let codeSize = layers[iCode].units;
+      layers.forEach((layer,i)=> {
+        let { units, alpha } = layer;
         if (i === 0) {
           inputSize = units;
           encoderUnits.push(units);
           encoderAlpha.push(alpha);
-        } else if (units < layers[i-1].units) {
-          if (units < layers[i+1].units) {
-            codeSize = units;
-            codeActivation = activation;
-          } else {
-            encoderUnits.push(units);
-            encoderAlpha.push(alpha);
-          }
-        } else if (units > layers[i-1].units) {
+        } else if (i < iCode) {
+          encoderUnits.push(units);
+          encoderAlpha.push(alpha);
+        } else if (iCode < i) {
           outputSize = units;
           decoderUnits.push(units);
           decoderAlpha.push(alpha);
@@ -181,7 +186,7 @@
       return (epoch, log)=>{
         if (logEpoch && (epoch % logEpoch === 9)) {
           let { val_mse, mse } = log;
-          logger.info(`Epoch${epoch}: `, JSON.stringify({val_mse, mse}));
+          logger.info(`Epoch${epoch}: `, {mse});
         }
       }
     }
@@ -269,12 +274,14 @@
     }
 
     async validateSignal(signal, opts={}) {
+      let { model=this.model, inputs, outputs} = opts;
+      if (outputs == null) {
+        assert(signal, `[E_SIGNAL_RQD] signal is required if no outputs are provided`);
+        let framed = AutoEncoder.frameSignal(signal, opts);
+        outputs = framed.frames;
+      }
+
       try {
-        let { model=this.model, inputs, outputs} = opts;
-        if (outputs == null) {
-          let framed = AutoEncoder.frameSignal(signal, opts);
-          outputs = framed.frames;
-        }
         let x = tf.tensor2d(inputs);
         let yExpected = tf.tensor2d(outputs);
         let y = await model.predict(x);
@@ -381,7 +388,7 @@
         let noise = tf.mul(noiseAmplitude, tf.randomNormal([inputs.length, inputSize]));
         tx = tf.add(tx, noise);
         tx = tf.clipByValue(tx, -1, 1);
-        that.info(`noiseAmplitude`, noiseAmplitude);
+        that.info(`train() randomNormal noiseAmplitude`, noiseAmplitude);
       }
       return model.fit(tx, ty, Object.assign({}, args, {
         batchSize, 

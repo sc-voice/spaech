@@ -139,7 +139,7 @@
     should.deepEqual([...f32.map(v=>v/3)], [0.3333333432674408, 0.6666666865348816, 1]);
     should.deepEqual([...i16.map(v=>v/3)], [0, 0, 1]);  // Trunc
   });
-  it("TESTTESTtransform(...)", async()=>{
+  it("transform(...)", async()=>{
     let verbose = 1;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
     const SCALE = 2;
@@ -205,7 +205,7 @@
     should.deepEqual(AutoEncoder.coderUnits(.8, 100, 5 ), [100, 80, 64, 51, 41]);
     should.deepEqual(AutoEncoder.coderUnits(1, 100, 5 ), [100, 100, 100, 100, 100]);
   });
-  it("TESTTESTgetWeights()", async()=>{
+  it("getWeights()", async()=>{
     let inputSize = 96;
     let frameSize = inputSize;
     let codeSize = 6;           // units in code layer
