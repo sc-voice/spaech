@@ -186,7 +186,7 @@
       return (epoch, log)=>{
         if (logEpoch && (epoch % logEpoch === 9)) {
           let { val_mse, mse } = log;
-          logger.info(`Epoch${epoch}: `, {mse});
+          logger.info(`Epoch${epoch}: `, {mse:mse.toExponential(8)});
         }
       }
     }

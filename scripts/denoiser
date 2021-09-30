@@ -10,7 +10,6 @@ const { WaveFile } = require('wavefile');
 const {
   Chart,
   AutoEncoder,
-  Mdct,
   Signal,
 } = require('../index');
 
@@ -28,28 +27,17 @@ const SOUND_ADJUST = path.join(APP_DIR, 'static/training-adjust.mp3');
 function help() {
     console.log(`
 NAME
-        denoiser - audio => audio denoiser
+        denoiser - audio de-noiser
 
 SYNOPSIS
         denoiser [OPTIONS] 
-        denoiser --signal-in TRAIN_WAV --model-path MODEL_PATH --train
-        denoiser -si TRAIN_WAV -sv VAL_WAV -mp MODEL_PATH -so XFM_VAL_WAV
+        denoiser -si INPUT_WAV -se EXPECT_WAV -mp MODEL_PATH -tr ATTEMPTS
+        denoiser -si INPUT_WAV -mp MODEL_PATH -so XFM_INPUT_WAV
 
 DESCRIPTION
-        Autoencode audio signal with an asymmetric auto-encoder (AAN). AAN input
-        consists of tri-blocks of 3*frameSize/2 MDCT coefficients. AAN output
-        consists of audio signal frames with a default frameSize of 192.
-        The AAN relies on snake activations (https://arxiv.org/pdf/2006.08195.pdf)
-        to handle the periodicity inherent in audio signals.
+        Denoising auto-encoder cleans up input signal.
 
-        The MDCT3 auto-encoder is asymmetric, with 3 inputs for every 2 outputs.  
-        This 3:2 ratio characterizes the MDCT coefficient overlap
-        in that it takes 3 coefficient blocks to represent a single signal frame
-        that is the length of 2 coefficient blocks. The asymmetry allows
-        the auto-encoder to use MDCT coefficient tri-blocks as recognizable features.
-        Each tri-block has a 1-to-1 mapping to the corresponding audio frame, so
-        the autoencoder is essentially still doing a 1-to-1 mapping, but from a
-        pre-transformed input space.
+        See scripts/train-dn for example of use.
 
     -bs, --batch-size N
         Number of training examples in each batch (128)
@@ -81,7 +69,7 @@ DESCRIPTION
 
     -eu, --encoder-units K
     -eu, --encoder-units N1,N2,...,NN
-        Number of units in each encoder layer (0.8)
+        Number of units in each encoder layer (0.9)
         If a single number K is given, the each successive layer will decrease
         by given factor (e.g., frameSize, K*frameSize, K*K*frameSize, ...)
         Alternatively, a list of specific unit numbers can be given.
@@ -101,9 +89,6 @@ DESCRIPTION
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
-    -ms, --mdct-stats JSON_FILE
-        Save MDCT coefficient stats for input signal
-
     -mp, --model-path MODEL_FOLDER
     -mp, --model-path URL
         JSON resource URL or local file path (test/model/coder)
@@ -116,19 +101,14 @@ DESCRIPTION
     -ns, --no-shuffle
         Do not shuffle training dataset (shuffle)
 
-    -ro, --residual-out WAV_FILE
-        Output residual of signal minus tranformed signal.
-        
-    -scm, --scale-mdct SCALE
-    -scm, --scale-mdct JSON_FILE
-        MDCT coefficient normalization to [-1,1] interval. (512)
-        If a JSON file is given, the scale array is read from the file.
-
     -sc, --scale SCALE
         Output audio signal scale (16384)
 
     -si, --signal-in WAV_FILE
         Input signal
+
+    -se, --signal-expected WAV_FILE
+        Expected outputs signal for training (input signal)
 
     -sv, --signal-validation WAV_FILE
         Validation signal (input signal)
@@ -194,8 +174,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.encoderLayers = requiredNumber();
   } else if (arg === '-eu' || arg === '--encoder-units') {
     cmdCfg.encoderUnits = requiredArg();
-  } else if (arg === '-scm' || arg === '--scale-mdct') {
-    cmdCfg.scaleIn = requiredArg();
   } else if (arg === '-sc' || arg === '--scale') {
     cmdCfg.scaleOut = requiredNumber();
   } else if (arg === '-ns' || arg === '--no-shuffle') {
@@ -204,8 +182,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.epochs = requiredNumber();
   } else if (arg === '-ie' || arg === '--initial-epoch') {
     cmdCfg.initialEpoch = requiredNumber();
-  } else if (arg === '-ms' || arg === '--mdct-stats') {
-    cmdCfg.mdctStatsPath = requiredArg();
   } else if (arg === '-mp' || arg === '--model-path') {
     cmdCfg.modelPath = requiredArg();
   } else if (arg === '-bs' || arg === '--batch-size') {
@@ -222,10 +198,10 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.noiseAmplitude = requiredNumber()/1000;
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = requiredNumber();
-  } else if (arg === '-ro' || arg === '--residual-out') {
-    cmdCfg.residualOut = requiredArg();
   } else if (arg === '-sv' || arg === '--signal-validation') {
     cmdCfg.signalValidation = requiredArg();
+  } else if (arg === '-se' || arg === '--signal-expected') {
+    cmdCfg.signalExpected = requiredArg();
   } else if (arg === '-si' || arg === '--signal-in') {
     cmdCfg.signalIn = requiredArg();
   } else if (arg === '-so' || arg === '--signal-out') {
@@ -249,23 +225,6 @@ async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
   return wavSig;
 }
 
-async function mdctTriBlocks({wavSig, mdct, scaleIn}) {
-  let { frameSize } = mdct;
-  assert(wavSig, `Expected input WAV signal`);
-  assert(scaleIn instanceof Array, `Expected scaleIn array`);
-  let {data:sigIn} = wavSig;
-  let window = Mdct.WINDOWS[1];
-  let triBks = [...mdct.encodeTriBlocks(sigIn, {})];
-  let maxScaled = 0;
-  let inputs = triBks.map(tb=>[...tb].map((v,i)=>{
-    let vScaled = v/scaleIn[i];
-    if (maxScaled < vScaled) { maxScaled = vScaled }
-    return vScaled;
-  }));
-  logger.info(`mdctTriBlocks() tri-blocks:`, triBks.length, `maxScaled:`, maxScaled); 
-  return {triBks, inputs};
-}
-
 function normalizeUrl(urlOrPath) {
   if (urlOrPath == null) {
     die(logger.error('E_MODEL_PATH', `Model url or path is required: -mp PATH`));
@@ -280,11 +239,14 @@ function normalizeUrl(urlOrPath) {
 
 async function configuration(cfg=cmdCfg) {
   let { 
-    encoderUnits, decoderLayers, frameSize=192, scaleIn, scaleOut=16384,
-    signalIn, signalValidation,
+    encoderUnits, decoderLayers, frameSize=192, 
+    scaleIn=16384,
+    scaleOut=16384,
+    signalExpected, signalIn, signalValidation,
   } = cfg;
 
   signalValidation = signalValidation || signalIn;
+  signalExpected = signalExpected || signalIn;
 
   if (encoderUnits != null) {
     if (/,/.test(encoderUnits)) {
@@ -294,9 +256,9 @@ async function configuration(cfg=cmdCfg) {
     }
   }
 
-  let inputSize = frameSize * 3 / 2;
+  let inputSize = frameSize;
   let outputSize = frameSize;
-  scaleIn = await initializeScale(scaleIn);
+  scaleIn = await initializeScale(scaleIn, inputSize);
 
   return Object.assign({}, {
     batchSize: 128,
@@ -306,14 +268,13 @@ async function configuration(cfg=cmdCfg) {
     encoderAlpha: 1.61803398875,
     encoderLayers: 3,
     decoderLayers,
-    encoderUnits: 0.8,
+    encoderUnits: 0.9,
     epochs: 100,
     frameSize,
     initialEpoch: 0,
     inputSize,
     outputSize,
     logLevel: 'info',
-    mdctStatsPath: undefined,
     modelPath: undefined,
     noiseAmplitude: 512/1000,
     scaleIn,
@@ -329,6 +290,7 @@ async function configuration(cfg=cmdCfg) {
     scaleIn,
     scaleOut,
     signalValidation,
+    signalExpected,
   });
 }
 
@@ -370,14 +332,27 @@ async function loadModel(modelPath, cfg) {
   }
 }
 
+function assertNumbers(inputs, msg) {
+  inputs.forEach((input,i)=> {
+    if (typeof input === 'number') {
+      assert(!isNaN(input), `${msg}[${i}]:${input}`);
+    } else {
+      let nans = input.reduce(((a,v)=> isNaN(v) ? a+1 : a), 0);
+      assert(!nans, `${msg}[${i}] has NaNs:`+
+        [...input].map(v=>isNaN(v)?'N':'.').join(''));
+    }
+  });
+}
+
 async function chartWorst({model, inputs, outputs, stats, chartLines}) {
   let { iMax, max, avg }  = stats;
+  assertNumbers(inputs, `[E_CHART_NAN] inputs`);
   let xtest = tf.tensor2d(inputs.slice(iMax,iMax+1));
   let ytest = await model.predict(xtest);
   let chart = new Chart();
   chart.plot({
     data: [[...ytest.dataSync()], outputs[iMax]], 
-    title:`Worst frame:${iMax} mse:${max} mseAvg:${avg} 1:expected 2:actual`,
+    title:`Worst frame:${iMax} mse:${max.toExponential(8)} mseAvg:${avg.toExponential(8)} 1:expected 2:actual`,
     lines: chartLines,
   });
 }
@@ -396,25 +371,15 @@ async function writeSignal(fpath, signal) {
   }
 }
 
-async function calcMdctStats(triBks, mdctStatsPath) {
-  let stats = [];
-  let nCoeffs = triBks[0].length;
-  for (let iCoeff = 0; iCoeff < nCoeffs; iCoeff++) {
-    let c = triBks.map(tb=>tb[iCoeff]);
-    let cStats = Signal.stats(c);
-    cStats.coefficient = iCoeff;
-    stats.push(cStats);
-  }
-  await fs.promises.writeFile(mdctStatsPath, JSON.stringify(stats, null, '\t'));
-  return stats;
-}
-
-async function initializeScale(scale) {
+async function initializeScale(scale, inputSize) {
   if (typeof scale === 'string' && scale.endsWith('.json')) {
     let json = JSON.parse(await fs.promises.readFile(scale));
     scale = json.map(s=>Math.max(Math.abs(s.min),Math.abs(s.max)));
     logger.info(`initializeScale() =>`, 
       scale.map(v=>Number(v.toFixed(1))).slice(0,8).join(', '), '...');
+    assertNumbers(scale, `[E_SCALE_NAN] scale`);
+    assert(scale.length === inputSize, 
+      `[E_SCALE_SIZE] scale.length expected:${inputSize} actual:${scale.length}`);
   } else {
     scale = Number(scale);
     assert(!isNaN(scale), `[E_SCALE_NAN] Scale must be a number`);
@@ -453,13 +418,17 @@ async function train({modelUrl, statsCurrent, iTrain, coder, valOpts,
     var statsTrained = await coder.validateSignal(null, valOpts);
     logger.debug(`errors after training:`, statsTrained);
     await chartWorst({model, inputs, outputs, stats:statsTrained, chartLines});
-    logger.info(`current mse:`, statsCurrent.avg);
-    logger.info(`trained mse:`, statsTrained.avg, `elapsed:`, elapsed );
+    logger.info(`current mse:`, statsCurrent.avg.toExponential(8));
+    logger.info(`trained mse:`, statsTrained.avg.toExponential(8), `elapsed:`, elapsed );
     if (savedModel !== model) {
-      logger.info(`saving new model#${iTrain} => ${modelUrl}`);
+      logger.info(`saving new model#${iTrain} mse:`, statsTrained.avg.toExponential(8), 
+        `noise:`, noiseAmplitude, `\n=> ${modelUrl}`);
       save = iTrain;
     } else if (statsTrained && statsTrained.avg < statsCurrent.avg) {
-      logger.info(`saving better model#${iTrain} => ${modelUrl}`);
+      logger.info(`saving better model#${iTrain} mse:`, statsTrained.avg.toExponential(8), 
+        `noise:`, noiseAmplitude, `\n=> ${modelUrl}`);
+      logger.info(`saving better model#${iTrain} mse:`,
+       statsTrained.avg.toExponential(8), `=> ${modelUrl}`);
       save = iTrain;
     } else {
       logger.info(`trained model not saved (mseCurrent <= mseTrained)`);
@@ -505,14 +474,13 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
     initialEpoch, 
     inputSize,
     logEpoch, 
-    mdctStatsPath,
     modelPath, 
     noiseAmplitude,
-    residualOut,
     scaleIn,
     scaleOut,
     shuffle,
     signalIn, 
+    signalExpected,
     signalOut,
     signalValidation,
     threshold=0,
@@ -520,28 +488,29 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
 
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
-  logger.debug(`command options parsed as`, cfg);
+  logger.info(`command options parsed as`, cfg);
   let nCoeffs = frameSize/2;
-  let mdct = new Mdct({frameSize});
   let frameOpts = {frameSize, threshold, dampen, scale:scaleOut};
   let trainSig = await wavSignal(signalIn);
+  let expSig = signalIn === signalExpected
+    ? trainSig
+    : await wavSignal(signalExpected);
   let valSig = signalIn === signalValidation
     ? trainSig
     : (await wavSignal(signalValidation));
-  let outputs = AutoEncoder.frameSignal(trainSig, frameOpts).frames;
+  let inputs = AutoEncoder.frameSignal(trainSig, frameOpts).frames;
+  assertNumbers(inputs, `[E_NAN] inputs`);
+  let inputsVal = signalIn === signalValidation
+    ? inputs
+    : AutoEncoder.frameSignal(valSig, frameOpts).frames;
+  assertNumbers(inputsVal, `[E_NAN] inputsVal`);
+  let outputs = signalIn === signalExpected
+    ? inputs
+    : AutoEncoder.frameSignal(expSig, frameOpts).frames;
   let outputsVal = signalIn === signalValidation
     ? outputs
     : AutoEncoder.frameSignal(valSig, frameOpts).frames;
-  let mdctTrain = await mdctTriBlocks({wavSig: trainSig, mdct, scaleIn});
-  let {triBks, inputs} = mdctTrain;
-  let mdctVal = signalIn === signalValidation
-    ? mdctTrain
-    : (await mdctTriBlocks({wavSig: valSig, mdct, scaleIn}));
-  let { inputs: inputsVal } = mdctVal;
-  logger.info(`tri-blocks:${triBks.length}x${triBks[0].length}`,
-    `frames:${outputs.length}x${outputs[0].length}`,
-    `signalIn:${signalIn}`);
-  mdctStatsPath && await calcMdctStats(triBks, mdctStatsPath);
+  logger.info(`frames:`, outputs.length, 'x', outputs[0].length, `signalIn:${signalIn}`);
   let { coder, modelUrl, savedModel } = await loadModel(modelPath, cfg);
 
   let model;
@@ -582,16 +551,6 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
       stats:statsCurrent, chartLines});
   }
 
-  if (signalOut && residualOut) {
-    let { data:dataOut } = sigOut || coder.transform(coeffs);
-    let dataRes = new Int16Array(dataOut.length);
-    for (let i=0; i < dataOut.length; i++) {
-      dataRes[i] = dataIn[i] - dataOut[i];
-    }
-    let sigRes = new Signal(dataRes);
-    await writeSignal(residualOut, sigRes);
-  }
-  
   playSound(SOUND_END);
   process.exit(0);
 })();
