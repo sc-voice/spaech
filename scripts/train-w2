@@ -5,10 +5,11 @@ if [ "$1" ]; then CODESIZE=$1;  shift; else CODESIZE=12;    fi
 if [ "$1" ]; then FRAMESIZE=$1; shift; else FRAMESIZE=192;  fi
 if [ "$1" ]; then NOISE=$1;     shift; else NOISE=512;      fi
 if [ "$1" ]; then EPOCHS=$1;    shift; else EPOCHS=100;     fi
+if [ "$1" ]; then WAVFRAMES=$1; shift; else WAVFRAMES=2;    fi
 if [ "$1" ]; then EPOCH1=$1;    shift; else EPOCH1=0;       fi
 if [ "$1" ]; then UNITS=$1;     shift; else UNITS=9;        fi
 
-SUFFIX=w2l${LAYERS}c${CODESIZE}f${FRAMESIZE}
+SUFFIX=w${WAVFRAMES}l${LAYERS}c${CODESIZE}f${FRAMESIZE}
 echo "LAYERS=$LAYERS UNITS=$UNITS CODESIZE=$CODESIZE" \
   "SUFFIX=$SUFFIX NOISE=$NOISE EPOCHS=$EPOCHS FRAMESIZE=$FRAMESIZE"
 MODEL=local/$SUFFIX/ko-pana-vado
@@ -35,6 +36,7 @@ scripts/wav2-coder \
   -ep $EPOCHS \
   -bs $BATCHSIZE \
   -nk $NOISE \
+  -wf $WAVFRAMES \
   -sv test/data/$AUDIO.wav \
   -so local/$SUFFIX/$AUDIO.wav 2>&1 | tee -a local/$SUFFIX/train.log 
 RC=${PIPESTATUS[0]}

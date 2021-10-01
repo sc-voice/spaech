@@ -71,7 +71,7 @@ DESCRIPTION
     -eu, --encoder-units N1,N2,...,NN
         Number of units in each encoder layer (0.9)
         If a single number K is given, the each successive layer will decrease
-        by given factor (e.g., frameSize, K*frameSize, K*K*frameSize, ...)
+        by given factor (e.g., inputSize, K*inputSize, K*K*inputSize, ...)
         Alternatively, a list of specific unit numbers can be given.
 
     -ie, --initial-epoch EPOCH
@@ -119,6 +119,9 @@ DESCRIPTION
     -tr, --train N
         Train code with up to N attempts to save a better model.
         If omitted, model is used as is without training. (0)
+
+    -wf, --wav-frames N
+        Number of WAV frames to use as input (2)
 
 `);
     process.exit(0);
@@ -208,6 +211,8 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.signalOut = requiredArg();
   } else if (arg === '-ll' || arg === '--log-level') {
     cmdCfg.logLevel = logger.logLevel = requiredArg();
+  } else if (arg === '-wf' || arg === '--wav-frames') {
+    cmdCfg.wavFrames = requiredArg();
   } else {
     die(logger.error('E_UNKNOWN_OPTION', `Unknown option: ${argv[i]}`));
   }
@@ -240,9 +245,10 @@ function normalizeUrl(urlOrPath) {
 async function configuration(cfg=cmdCfg) {
   let { 
     encoderUnits, decoderLayers, frameSize=192, 
-    scaleIn=16384,
-    scaleOut=16384,
+    scaleIn=16384, scaleOut=16384,
     signalExpected, signalIn, signalValidation,
+    inputSize,
+    wavFrames,
   } = cfg;
 
   signalValidation = signalValidation || signalIn;
@@ -256,7 +262,7 @@ async function configuration(cfg=cmdCfg) {
     }
   }
 
-  let inputSize = 2*frameSize;
+  inputSize = inputSize || wavFrames*frameSize;
   let outputSize = frameSize;
   scaleIn = await initializeScale(scaleIn, inputSize);
 
@@ -284,6 +290,7 @@ async function configuration(cfg=cmdCfg) {
     signalOut: undefined,
     trainAttempts: 0,
     verbose: false,
+    wavFrames: 2,
 
   }, cfg, {
     encoderUnits,
@@ -463,13 +470,18 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
   }
 }
 
-function inputsOfFrames(frames) {
+function inputsOfFrames(frames, inputSize) {
   let frameSize = frames[0].length;
+  let wavFrames = Math.ceil(inputSize / frameSize);
   let iEnd = frames.length - 1;
-  let inputs = frames.map((f,i) => i < iEnd
-    ? [...f, ...frames[i+1]]
-    : [...f, ...(new Float32Array(frameSize))]
-  );
+  let inputs = frames.map((f,i) => {
+    let inputRow = [];
+    for (let j=i; j < i+wavFrames; j++) {
+      let fj = frames[j] || new Float32Array(frameSize);
+      inputRow = inputRow.concat([...fj]);
+    }
+    return inputRow;
+  });
   return inputs;
 }
 
@@ -499,7 +511,6 @@ function inputsOfFrames(frames) {
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
   logger.info(`command options parsed as`, cfg);
-  let nCoeffs = frameSize/2;
   let frameOpts = {frameSize, threshold, dampen, scale:scaleOut};
   let trainSig = await wavSignal(signalIn);
   let expSig = signalIn === signalExpected
@@ -512,11 +523,11 @@ function inputsOfFrames(frames) {
   let valFrames = signalIn === signalValidation
     ? inputFrames
     : AutoEncoder.frameSignal(valSig, frameOpts).frames;
-  let inputs = inputsOfFrames(inputFrames);
+  let inputs = inputsOfFrames(inputFrames, inputSize);
   assertNumbers(inputs, `[E_NAN] inputs`);
   let inputsVal = signalIn === signalValidation
     ? inputs
-    : inputsOfFrames(valFrames);
+    : inputsOfFrames(valFrames, inputSize);
   assertNumbers(inputsVal, `[E_NAN] inputsVal`);
   let outputs = signalIn === signalExpected
     ? inputs
