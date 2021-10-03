@@ -1,0 +1,162 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert')
+const { exec, execSync } = require('child_process');
+const { logger } = require('log-instance');
+const tf = require('@tensorflow/tfjs-node');
+const { WaveFile } = require('wavefile');
+const { fft, util: fftutil } = require('fft-js');
+const {
+  Chart,
+  AutoEncoder,
+  Signal,
+} = require('../index');
+
+const APP_DIR = path.dirname(__dirname);
+const TEST_DATA_DIR = path.join(APP_DIR, 'test/data');
+const EVAM_ME_SUTTAM_WAV = path.join(TEST_DATA_DIR, 'evam-me-suttam.wav');
+const AN9_20_4_3_WAV = path.join(TEST_DATA_DIR, 'an9.20_4.3.wav');
+const argv = process.argv;
+const script = argv[1].split('/').pop();
+const SOUND_END = path.join(APP_DIR, 'static/training-end.mp3');
+const SOUND_SUCCESS = path.join(APP_DIR, 'static/training-success.mp3');
+const SOUND_FAILURE = path.join(APP_DIR, 'static/training-failure.mp3');
+const SOUND_ADJUST = path.join(APP_DIR, 'static/training-adjust.mp3');
+
+function help() {
+    console.log(`
+NAME
+        wav-fft - Fast Fourier Transform of WAV audio file
+
+SYNOPSIS
+        wav-fft INPUT_WAV
+
+DESCRIPTION
+        Generate FFT from source WAV file
+
+    -?, --help
+        Print help
+
+    -bi, --bin-interval
+        Show frequencies at given bin interval (1)
+
+    -ll, --log-level
+        Logging level: warn, error, [info], debug
+
+    -wl, --window-low WINDOW_SIZE
+        Show frequencies in window starting with lowest frequency
+
+    -wm, --window-max WINDOW_SIZE
+        Show frequencies in window of given size centered round maximum magnitude
+
+`);
+    process.exit(0);
+}
+
+function playSound(sound) {
+  let cmd = `ffplay -nodisp -autoexit -loglevel error -stats ${sound}`;
+  execSync(cmd, {
+    cwd: APP_DIR,
+  });
+}
+
+function die(e) {
+  playSound(SOUND_FAILURE);
+  process.exit(-1);
+}
+
+var cmdCfg = {};
+
+var nargs = argv.length;
+if (nargs < 3) {
+    help();
+}
+for (var i = 2; i < nargs; i++) {
+  var arg = argv[i];
+  let requiredArg = ()=>{
+    let nextArg = argv[++i];
+    if (nextArg == null) {
+      die(logger.error('E_REQUIRED', `Expected additional information for: ${arg}`));
+    }
+    return nextArg;
+  }
+  let requiredNumber = ()=>{
+    let n = Number(requiredArg());
+    if (isNaN(n)) {
+      die(logger.error(`[E_NUMBER] "${argv[i-1]}" option requires a number:${argv[i]}`));
+    }
+    return n;
+  }
+  if (i<2) { continue; }
+  if (arg === '-?' || arg === '--help') {
+    help();
+  } else if (arg === '-bi' || arg === '--bin-interval') {
+    cmdCfg.binInterval = requiredNumber();
+    assert(0 < cmdCfg.binInterval, `[E_BIN_INTERVAL] must be 1 or greater: ${cmdCfg.binInterval}`);
+  } else if (arg === '-wl' || arg === '--window-low') {
+    cmdCfg.windowLow = requiredNumber();
+  } else if (arg === '-wc' || arg === '--window-centered') {
+    cmdCfg.windowCentered = requiredNumber();
+  } else if (arg === '-ll' || arg === '--log-level') {
+    cmdCfg.logLevel = logger.logLevel = requiredArg();
+  } else {
+    cmdCfg.wavFile = arg;
+  }
+}
+
+async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
+  assert(fpath, `Expected signal file path`);
+  let buf = await fs.promises.readFile(fpath);
+  let wf = new WaveFile(buf);
+  let wavSig = new Signal(wf.getSamples(false, Int16Array));
+  let stats = wavSig.stats();
+  logger.debug(`wavSignal`, fpath, stats);
+  logger.info(`wavSignal() ${fpath} =>`, `max:`, stats.max, `count:`, stats.count);
+
+  return wavSig;
+}
+
+
+(async function() {
+  let { wavFile, windowCentered, windowLow, binInterval=1 } = cmdCfg;
+  logger.info(script, argv.slice(2).join(' '));
+  assert(wavFile, `[E_WAV_FILE] expected WAV filename`);
+  let wavSig = await wavSignal(wavFile);
+  let data = [...wavSig.data];
+  let log2 = Math.log2(data.length);
+  data = data.slice(0, Math.pow(2, Math.floor(log2)));
+  console.log(`data`, wavSig.data.length, log2, data.length)
+  let phasors = fft(data);
+  let frequencies = fftutil.fftFreq(phasors, 22050);
+  let magnitudes = fftutil.fftMag(phasors);
+  let magStats = Signal.stats(magnitudes);
+  console.log(`fft`, magStats);
+  let iStart = 0;
+  let iEnd = frequencies.length;
+  let window = iEnd - iStart;
+  if (windowCentered) {
+    window = windowCentered;
+    iStart = Math.max(0, magStats.iMax - window/2);
+    iEnd = Math.min(frequencies.length, magStats.iMax + window/2);
+  }
+  if (windowLow) {
+    window = windowLow;
+    iEnd = iStart + window;
+  }
+  let mag = 0;
+  frequencies.slice(iStart, iEnd).forEach((f,i)=>{
+    mag += magnitudes[iStart+i] / magStats.max;
+    if (i % binInterval === 0) {
+      let bar = [];
+      let MAXBAR = 50;
+      let barh = mag * MAXBAR;
+      for (let i=0; i < barh; i++) {
+        bar.push('*');
+      }
+      console.log(`Hz:`, f.toFixed(1), (mag/binInterval).toExponential(8), bar.join(''));
+      mag = 0;
+    }
+  });
+})();

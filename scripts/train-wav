@@ -1,0 +1,59 @@
+#!/bin/bash
+
+if [ "$1" ]; then WAVFRAMES=$1; shift; else WAVFRAMES=1;    fi
+if [ "$1" ]; then LAYERS=$1;    shift; else LAYERS=3;       fi
+if [ "$1" ]; then CODESIZE=$1;  shift; else CODESIZE=96;    fi
+if [ "$1" ]; then FRAMESIZE=$1; shift; else FRAMESIZE=192;  fi
+if [ "$1" ]; then NOISE=$1;     shift; else NOISE=512;      fi
+if [ "$1" ]; then EPOCHS=$1;    shift; else EPOCHS=500;     fi
+if [ "$1" ]; then EPOCH1=$1;    shift; else EPOCH1=0;       fi
+if [ "$1" ]; then UNITS=$1;     shift; else UNITS=9;        fi
+
+MODELCFG=w${WAVFRAMES}l${LAYERS}c${CODESIZE}f${FRAMESIZE}e${EPOCHS}n${NOISE}
+echo "LAYERS=$LAYERS UNITS=$UNITS CODESIZE=$CODESIZE" \
+  "MODELCFG=$MODELCFG NOISE=$NOISE EPOCHS=$EPOCHS FRAMESIZE=$FRAMESIZE"
+TRAIN=an9.20_4.3
+MODEL=local/$MODELCFG/$TRAIN
+SIGTRN=test/data/$TRAIN.wav
+SIGTRNEXP=$SIGTRN
+#SIGTRN=local/m3l1u9c192/ko-pana-vado.wav
+AUDIO=ko-pana-vado
+SIGVAL=test/data/$AUDIO.wav
+SIGVALEXP=test/data/$AUDIO.wav
+ATTEMPTS=3
+BATCHSIZE=256
+
+mkdir -p $MODEL
+
+echo $MODEL "$0"
+scripts/wav-coder \
+  -bs $BATCHSIZE \
+  -cs $CODESIZE \
+  -el $LAYERS \
+  -ep $EPOCHS \
+  -eu 0.$UNITS \
+  -fs $FRAMESIZE \
+  -ie $EPOCH1 \
+  -mp $MODEL \
+  -nk $NOISE \
+  -se $SIGTRNEXP \
+  -si $SIGTRN \
+  -so local/$MODELCFG/$AUDIO.wav \
+  -sv $SIGVAL \
+  -sve $SIGVALEXP \
+  -tr $ATTEMPTS \
+  -wf $WAVFRAMES \
+  2>&1 | tee -a local/$MODELCFG/train.log 
+RC=${PIPESTATUS[0]}
+echo LAYERS=$LAYERS UNITS=$UNITS CODESIZE=$CODESIZE MODELCFG=$MODELCFG NOISE=$NOISE EPOCHS=$EPOCHS
+echo "TRAINED $MODEL => $RC"
+echo 
+ALTAUDIO=evam-me-suttam
+echo "Testing $ALTAUDIO..."
+scripts/wav-coder \
+  -mp $MODEL \
+  -si test/data/$ALTAUDIO.wav \
+  -so local/$MODELCFG/$ALTAUDIO.wav \
+  -fs $FRAMESIZE \
+  -wf $WAVFRAMES \
+  2>&1 | tee -a local/$MODELCFG/train.log 

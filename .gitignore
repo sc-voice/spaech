@@ -1,7 +1,7 @@
 .nuxt/
 ssl/
 *.wiki
-local/
+local*/
 archive
 .eslint*
 dist/

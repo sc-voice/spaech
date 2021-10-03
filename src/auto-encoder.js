@@ -30,6 +30,7 @@
         scaleOut,
       } = args;
 
+
       scaleIn = scaleIn || scale || SCALE;
       scaleOut = scaleOut || scale || SCALE;
 
@@ -37,6 +38,8 @@
       inputSize = inputSize || outputSize;
       assert(outputSize && inputSize, 
         `[E_INPUTSIZE_OUTPUTSIZE] outputSize and/or inputSize are required`);
+      assert(!isNaN(inputSize), `[E_INPUTSIZE] expected number:${inputSize}`);
+      assert(!isNaN(outputSize), `[E_OUPUTSIZE] expected number:${outputSize}`);
       decoderLayers = decoderLayers || encoderLayers;
 
       this.encoderUnits = AutoEncoder.coderUnits(encoderUnits, inputSize, encoderLayers);
@@ -78,7 +81,7 @@
         dampen,         // minium number of samples at or above threshold 
         scale = 16384,  // normalization to interval [0,1]
       } = opts;
-      assert(frameSize, `[E_FRAMESIZE] frameSize is required`);
+      assert(!isNaN(frameSize), `[E_FRAMESIZE] frameSize is required:${frameSize}`);
       assert(signal instanceof Signal, 'signal must be a Signal');
       dampen = dampen == null 
         ? (threshold ? 36 : 0) 
