@@ -9,6 +9,7 @@
   const FRAME_SIZE = 192;
   const N_LAYERS = 3;
   const SCALE = 16384; // typical calm speaking voice amplitude (AN9.20_4.3.mp3)
+  const AGG_MAP = {};
 
   class AutoEncoder {
     constructor(args={}) {
@@ -29,7 +30,6 @@
         scaleIn,
         scaleOut,
       } = args;
-
 
       scaleIn = scaleIn || scale || SCALE;
       scaleOut = scaleOut || scale || SCALE;
@@ -71,18 +71,49 @@
       });
     }
 
+    /*
+     * A frame aggregate vector factory
+     */
+    static aggFrame(frameSize, scale=1, fAgg='cos') {
+      if (fAgg === 'cos') {
+        fAgg = Math.cos;
+      } else if (fAgg === 'sin') {
+        fAgg = Math.sin;
+      } else {
+        assert(false, `[E_AGG_FUN] expected aggregate function name:${fAgg}`); 
+      }
+      let key = `${fAgg}_${frameSize}_${scale}`;
+      let aggFrame = AGG_MAP[key] = AGG_MAP[key] || [];
+      if (aggFrame.length === 0) {
+        for (let i = 0; i < frameSize; i++) {
+          let t = i / frameSize;
+          aggFrame.push(scale*fAgg(2*Math.PI*t));
+        }
+      }
+      return aggFrame;
+    }
+
     /**
      * Scale signal and split it up into frames for each detected word.
      */
     static frameSignal(signal, opts={}) {
       let { 
         frameSize,
-        threshold = 2,  // minimum signal that starts word
-        dampen,         // minium number of samples at or above threshold 
-        scale = 16384,  // normalization to interval [0,1]
+        threshold = 2,    // minimum signal that starts word
+        dampen,           // minium number of samples at or above threshold 
+        scale = 16384,    // normalization to interval [0,1]
+        aggregate = null, // extend each frame with given frame aggregate
       } = opts;
       assert(!isNaN(frameSize), `[E_FRAMESIZE] frameSize is required:${frameSize}`);
       assert(signal instanceof Signal, 'signal must be a Signal');
+      if (aggregate) {
+        assert(typeof scale === 'number' || typeof scale[frameSize] === 'number',
+          `[E_SCALE] scale must have value for frame aggregate:${scale}`);
+        if (typeof aggregate === 'string') {
+          let aggVec = AutoEncoder.aggFrame(frameSize, 1, aggregate);
+          aggregate = (a,v,i) => v*aggVec[i] + a;
+        }
+      }
       dampen = dampen == null 
         ? (threshold ? 36 : 0) 
         : dampen;
@@ -97,6 +128,8 @@
 
       let { data } = signal;
       let frames = [];
+      let aggMax = 0;
+      let aggMin = 0;
       for (let iSplit = 0; iSplit < splits.length; iSplit++) {
         let { start, length, nFrames, end } = splits[iSplit];
         for (let i = 0; i < nFrames; i++) {
@@ -108,8 +141,21 @@
           frame = scale instanceof Array
             ? frame.map((v,i)=>v/scale[i])
             : frame.map((v,i)=>v/scale);
+          if (aggregate) {
+            let agg = frame.reduce(aggregate, 0);
+            aggMax < agg && (aggMax = agg);
+            agg < aggMin && (aggMin = agg);
+            frame.push(frame.reduce(aggregate,0));
+          }
           frames.push(frame); 
         }
+      }
+      if (aggregate) {
+        let aggScale = 1 / Math.max(Math.abs(aggMin), Math.abs(aggMax));
+        frames = frames.map(f=>{
+          f[frameSize] *= aggScale;
+          return f;
+        });
       }
 
       return {splits, frames};

@@ -45,6 +45,9 @@ DESCRIPTION
     -cl, --chart-lines N
         Number of lines used to chart worst signal mismatch (15)
 
+    -cc, --cancel-carrier
+        Cancel carrier signal by adding an additional input/output
+
     -cs, --code-size
         Number of units in the bottleneck code layer (96)
 
