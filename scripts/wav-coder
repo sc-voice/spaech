@@ -83,6 +83,15 @@ DESCRIPTION
     -le, --log-epoch N
         Log training stats every every N epochs (10)
 
+    -fa, --frame-aggregate AGG_NAME
+        Since the audio signal is broken up into frames, the decoded signal will 
+        contain a low-frequency "frame noise buzz" (FNB) at a frequency of 22050/frameSize Hz. 
+        Adding a frame aggregate input to each frame reduces FNB. AGG_NAME can be:
+        none (no aggregate), cos (cosine), cosr (cosine with random phase), 0 (no aggregate).
+        If output aggregates are different from input aggregates, separate them with
+        underscore (e.g., cosr_0). See also scripts/wav-fft for WAV FFT analysis.
+       (none)
+        
     -fs, --frame-size
         Audio is encoded/decoded by consecutive frames of given size. (192)
 
@@ -99,7 +108,7 @@ DESCRIPTION
     -na, --noise-amplitude  N
     -nk, --noise-amplitude-k N_THOUSANDTH
         Initial noise amplitude as a number [0..1] or a thousandth [0...999]. Noise
-        amplitude is halved to lowest thousandth with each training failure (512/1000)
+        amplitude is halved to lowest thousandth with each training failure (0/1000)
 
     -ns, --no-shuffle
         Do not shuffle training dataset (shuffle)
@@ -205,6 +214,8 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.noiseAmplitude = requiredNumber();
   } else if (arg === '-nk' || arg === '--noise-amplitude-k') {
     cmdCfg.noiseAmplitude = requiredNumber()/1000;
+  } else if (arg === '-fa' || arg === '--frame-aggregate') {
+    cmdCfg.frameAggregate = requiredArg();
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = requiredNumber();
   } else if (arg === '-sv' || arg === '--signal-validation') {
@@ -226,8 +237,8 @@ for (var i = 2; i < nargs; i++) {
   }
 }
 
-async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
-  assert(fpath, `Expected signal file path`);
+async function wavSignal(fpath) {
+  assert(fpath, `Expected signal file path: ${fpath}`);
   let buf = await fs.promises.readFile(fpath);
   let wf = new WaveFile(buf);
   let wavSig = new Signal(wf.getSamples(false, Int16Array));
@@ -252,7 +263,7 @@ function normalizeUrl(urlOrPath) {
 
 async function configuration(cfg=cmdCfg) {
   let { 
-    encoderUnits, decoderLayers, frameSize=192, 
+    encoderUnits, decoderLayers, frameSize=192, frameAggregate,
     scaleIn=16384, scaleOut=16384,
     signalExpected, signalIn, signalValidation, signalValidationExpected,
     inputSize,
@@ -277,6 +288,13 @@ async function configuration(cfg=cmdCfg) {
   assert(!isNaN(inputSize), `[E_INPUTSIZE] expected number:${inputSize}`);
   let outputSize = frameSize;
   scaleIn = await initializeScale(scaleIn, inputSize);
+  if (frameAggregate === 'none') {
+    frameAggregate = undefined;
+  }
+  if (frameAggregate) {
+    inputSize += wavFrames;
+    outputSize++;
+  }
 
   return Object.assign({}, {
     batchSize: 128,
@@ -294,7 +312,7 @@ async function configuration(cfg=cmdCfg) {
     outputSize,
     logLevel: 'info',
     modelPath: undefined,
-    noiseAmplitude: 512/1000,
+    noiseAmplitude: 0,
     scaleIn,
     scaleOut,
     shuffle: true,
@@ -302,7 +320,6 @@ async function configuration(cfg=cmdCfg) {
     signalOut: undefined,
     trainAttempts: 0,
     verbose: false,
-    wavFrames: 2,
 
   }, cfg, {
     encoderUnits,
@@ -311,6 +328,8 @@ async function configuration(cfg=cmdCfg) {
     signalValidation,
     signalValidationExpected,
     signalExpected,
+    wavFrames,
+    frameAggregate,
   });
 }
 
@@ -471,11 +490,31 @@ async function train({statsCurrent, iTrain, coder, valOpts,
   }
 }
 
-async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
+async function writeValidationSignal(args={}) {
+  let {inputsVal, scaleOut, coder, signalOut, frameSize, frameAggregate} = args;
   let predicted = (await coder.predict(inputsVal));
   let scaled = new Int16Array(scaleOut instanceof Array 
     ? predicted.map((v,i)=>v*scaleOut[i])
     : predicted.map((v)=>v*scaleOut));
+  if (frameAggregate) {
+    let scaledLen = frameSize * scaled.length / (frameSize+1);
+    let scaled2 = new Int16Array(scaledLen);
+    for (let i=0,j=0; i < scaledLen; i+=frameSize, j+=frameSize+1) {
+      scaled2.set(scaled.subarray(j,j+frameSize), i);
+    }
+    scaled = scaled2;
+  console.log(`scaled DEBUG`, scaledLen);
+  /*
+    let p = [];
+    while (predicted.length) {
+      p = p.concat(predicted.slice(0,frameSize));
+      predicted = predicted.slice(frameSize+1);
+    }
+    predicted = p;
+    logger.info(`writeValidationSignal() pruning frameAggregate:${frameAggregate}`, predicted.length);
+    */
+  }
+
   let sigOut = new Signal(scaled);
   await writeSignal(signalOut, sigOut);
   playSound(signalOut);
@@ -502,12 +541,14 @@ function inputsOfFrames(frames, inputSize) {
 
 (async function() {
   let cfg = await configuration(cmdCfg);
+  let msStart = Date.now();
   let { 
     batchSize,
     chartLines,
     dampen=0,
     epochs, 
     frameSize,
+    frameAggregate,
     initialEpoch, 
     inputSize,
     outputSize,
@@ -528,7 +569,10 @@ function inputsOfFrames(frames, inputSize) {
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
   logger.debug(`command options parsed as`, cfg);
-  let frameOpts = {frameSize, threshold, dampen, scale:scaleOut};
+
+  let frameOpts = {frameSize, threshold, dampen, scale:scaleOut, aggregate:frameAggregate};
+  let frameOptsIn = Object.assign({output:false}, frameOpts);
+  let frameOptsOut = Object.assign({output:true}, frameOpts);
   let trainSig = await wavSignal(signalIn);
   let expSig = signalIn === signalExpected
     ? trainSig
@@ -539,22 +583,22 @@ function inputsOfFrames(frames, inputSize) {
   let valExpSig = signalValidation === signalValidationExpected
     ? valSig
     : (await wavSignal(signalValidationExpected));
-  let inputFrames = AutoEncoder.frameSignal(trainSig, frameOpts).frames;
+  let inputFrames = AutoEncoder.frameSignal(trainSig, frameOptsIn).frames;
   let valFrames = signalIn === signalValidation
     ? inputFrames
-    : AutoEncoder.frameSignal(valSig, frameOpts).frames;
+    : AutoEncoder.frameSignal(valSig, frameOptsIn).frames;
   let inputs = inputsOfFrames(inputFrames, inputSize);
   assertNumbers(inputs, `[E_NAN] inputs`);
   let inputsVal = signalIn === signalValidation
     ? inputs
     : inputsOfFrames(valFrames, inputSize);
   assertNumbers(inputsVal, `[E_NAN] inputsVal`);
-  let outputs = signalIn === signalExpected
+  let outputs = signalIn === signalExpected && !frameAggregate
     ? inputFrames
-    : AutoEncoder.frameSignal(expSig, frameOpts).frames;
-  let outputsVal = signalIn === signalValidationExpected
+    : AutoEncoder.frameSignal(expSig, frameOptsOut).frames;
+  let outputsVal = signalIn === signalValidationExpected && !frameAggregate
     ? outputs
-    : AutoEncoder.frameSignal(valExpSig, frameOpts).frames;
+    : AutoEncoder.frameSignal(valExpSig, frameOptsOut).frames;
   logger.info(`frames:`, outputs.length, 'x', outputs[0].length, `signalIn:${signalIn}`);
   let { coder, modelUrl, savedModel } = await loadModel(modelPath, cfg);
 
@@ -565,6 +609,7 @@ function inputsOfFrames(frames, inputSize) {
   let valOpts = {inputs:inputsVal, outputs:outputsVal, frameSize};
   let statsCurrent = await coder.validateSignal(valSig, valOpts);
   let sigOut;
+  let writeOpts = {inputsVal, scaleOut, coder, signalOut, frameSize, frameAggregate};
 
   if (trainAttempts) {
     model.summary();
@@ -583,7 +628,7 @@ function inputsOfFrames(frames, inputSize) {
           logger.debug(`saved model#${iTrain} => ${modelUrl}`);
           logger.info(`saved model#${iTrain} => ${modelPath}`);
           playSound(SOUND_SUCCESS);
-          signalOut && await writeValidationSignal({inputsVal, scaleOut, coder, signalOut});
+          signalOut && await writeValidationSignal(writeOpts);
           statsCurrent = res.statsTrained;
           savedModel = model;
         } else if (noise) {
@@ -594,13 +639,15 @@ function inputsOfFrames(frames, inputSize) {
       } while (noise);
     }
   } else if (modelPath) {
-    signalOut && await writeValidationSignal({inputsVal, scaleOut, coder, signalOut});
+    signalOut && await writeValidationSignal(writeOpts);
     logger.debug(`signal stats for existing model`, statsCurrent);
     await chartWorst({model, inputs: inputsVal, outputs: outputsVal, 
       stats:statsCurrent, chartLines});
   }
 
-  signalOut && logger.info(`final mse:${statsCurrent.avg.toExponential(8)} => ${signalOut}`);
+  let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
+  let mse = statsCurrent.avg.toExponential(8);
+  signalOut && logger.info(`final mse:${mse} => ${signalOut} (${elapsed}m}`);
   playSound(SOUND_END);
   process.exit(0);
 })();

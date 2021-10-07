@@ -542,6 +542,7 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
   } = cfg;
   logger.info(script, argv.slice(2).join(' '));
   logger.debug(`command options parsed as`, cfg);
+  let msStart = Date.now();
   let nCoeffs = frameSize/2;
   let mdct = new Mdct({frameSize});
   let frameOpts = {frameSize, threshold, dampen, scale:scaleOut};
@@ -615,6 +616,9 @@ async function writeValidationSignal({inputsVal, scaleOut, coder, signalOut}) {
     await writeSignal(residualOut, sigRes);
   }
   
+  let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
+  let mse = statsCurrent.avg.toExponential(8);
+  signalOut && logger.info(`final mse:${mse} => ${signalOut} (${elapsed}m}`);
   playSound(SOUND_END);
   process.exit(0);
 })();

@@ -14,15 +14,19 @@
         xTicks2=50,
         title='Chart',
         lineLength=100,
+        xInterval=1,
       } = args;
 
-      this.data = data;
-      this.lines = lines;
-      this.precision = precision;
-      this.xTicks = xTicks;
-      this.yTicks = yTicks;
-      this.title = title;
-      this.lineLength = lineLength;
+      assert(data instanceof Array, `[E_CHART_DATA] expected array of numbers for data`);
+
+      Object.assign(this, { 
+        data,
+        lines,
+        precision,
+        xTicks,
+        yTicks,
+        title, lineLength, xInterval,
+      });
     }
 
     stats(data=[]) {
@@ -77,7 +81,7 @@
         data=this.data,
         lines=this.lines,
         xTicks=this.xTicks,
-        xInterval=1,
+        xInterval=this.xInterval,
         title=this.title,
         transpose=false,
       } = args;

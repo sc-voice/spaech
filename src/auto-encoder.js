@@ -74,22 +74,31 @@
     /*
      * A frame aggregate vector factory
      */
-    static aggFrame(frameSize, scale=1, fAgg='cos') {
+    static aggFrame(frameSize, scale=1, aggregate='cos') {
+      let fAgg = aggregate.split(':')[0];
+      let random;
       if (fAgg === 'cos') {
         fAgg = Math.cos;
+      } else if (fAgg === 'cosr') {
+        random = Math.random();
+        fAgg = (function cosr(x) { return Math.cos(x+2*Math.PI*random)});
       } else if (fAgg === 'sin') {
         fAgg = Math.sin;
+      } else if (fAgg === '0') {
+        fAgg = (function zero(x) { return 0});
       } else {
         assert(false, `[E_AGG_FUN] expected aggregate function name:${fAgg}`); 
       }
-      let key = `${fAgg}_${frameSize}_${scale}`;
-      let aggFrame = AGG_MAP[key] = AGG_MAP[key] || [];
+      let key = `${fAgg.name}_${frameSize}_${scale}`;
+      let aggFrame = AGG_MAP[key] || [];
       if (aggFrame.length === 0) {
         for (let i = 0; i < frameSize; i++) {
           let t = i / frameSize;
-          aggFrame.push(scale*fAgg(2*Math.PI*t));
+          let v = fAgg(2*Math.PI*t);
+          aggFrame.push(scale*v);
         }
       }
+      isNaN(random) && (AGG_MAP[key] = aggFrame);
       return aggFrame;
     }
 
@@ -103,6 +112,7 @@
         dampen,           // minium number of samples at or above threshold 
         scale = 16384,    // normalization to interval [0,1]
         aggregate = null, // extend each frame with given frame aggregate
+        output = false,
       } = opts;
       assert(!isNaN(frameSize), `[E_FRAMESIZE] frameSize is required:${frameSize}`);
       assert(signal instanceof Signal, 'signal must be a Signal');
@@ -145,17 +155,20 @@
             let agg = frame.reduce(aggregate, 0);
             aggMax < agg && (aggMax = agg);
             agg < aggMin && (aggMin = agg);
-            frame.push(frame.reduce(aggregate,0));
+            frame.push(agg);
           }
           frames.push(frame); 
         }
       }
       if (aggregate) {
-        let aggScale = 1 / Math.max(Math.abs(aggMin), Math.abs(aggMax));
-        frames = frames.map(f=>{
-          f[frameSize] *= aggScale;
-          return f;
-        });
+        let denominator = Math.max(Math.abs(aggMin), Math.abs(aggMax)); 
+        if (denominator) {
+          let aggScale = 1 / denominator;
+          frames = frames.map(f=>{
+            f[frameSize] *= aggScale;
+            return f;
+          });
+        }
       }
 
       return {splits, frames};
@@ -323,10 +336,11 @@
     }
 
     async validateSignal(signal, opts={}) {
-      let { model=this.model, inputs, outputs} = opts;
+      let { model=this.model, inputs, outputs } = opts;
       if (outputs == null) {
+        let { output=true } = opts;
         assert(signal, `[E_SIGNAL_RQD] signal is required if no outputs are provided`);
-        let framed = AutoEncoder.frameSignal(signal, opts);
+        let framed = AutoEncoder.frameSignal(signal, Object.assign({output}, opts));
         outputs = framed.frames;
       }
 

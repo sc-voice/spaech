@@ -261,13 +261,14 @@
     console.log(`mse`, mse.dataSync());
     should.deepEqual(mse2.dataSync(), mse.dataSync());
   });
-  it("TESTTESTaggFrame()", async()=>{
+  it("aggFrame()", async()=>{
     let dataFrames = [[-10,-5,-1], [0,1,5], [0,5,10]];
     let signal = new Signal(dataFrames.flat());
     let frameSize = 3;
     let aggFrame = [0,1,2].map(v=>Math.cos(2*Math.PI*v/frameSize));
     should.deepEqual(AutoEncoder.aggFrame(frameSize), aggFrame);
     let coder = new AutoEncoder({inputSize:frameSize});
+
     let threshold = 0;
     let scale = 1;
     let aggregate = 'cos';
@@ -283,8 +284,47 @@
       frames.map(f=>f.slice(frameSize)), 
       dataFrames.map(frame=>[aScale*frame.reduce(((a,v,i)=>v*Math.cos(2*Math.PI*i/frameSize)+a), 0)])
     );
+
+    aggregate = 'cos_0';
+    opts.aggregate = aggregate;
+    opts.output = false;
+    res = await AutoEncoder.frameSignal(signal, opts);
+    frames = res.frames;
+    should.deepEqual(
+      frames.map(f=>f.slice(frameSize)), 
+      dataFrames.map(frame=>[aScale*frame.reduce(((a,v,i)=>v*Math.cos(2*Math.PI*i/frameSize)+a), 0)])
+    );
+    opts.output = true;
+    res = await AutoEncoder.frameSignal(signal, opts);
+    frames = res.frames;
+    should.deepEqual(
+      frames.map(f=>f.slice(frameSize)), 
+      dataFrames.map(frame=>[0])
+    );
   });
-  it("TESTTESTaggFrame() AN9.20_4.3", async()=>{
+  it("aggFrame() cosr", async()=>{
+    let dataFrames = [[-10,-5,-1], [0,1,5], [0,5,10]];
+    let signal = new Signal(dataFrames.flat());
+    let frameSize = 3;
+    let aggFrame = [0,1,2].map(v=>Math.cos(2*Math.PI*v/frameSize));
+    should.deepEqual(AutoEncoder.aggFrame(frameSize), aggFrame);
+    let coder = new AutoEncoder({inputSize:frameSize});
+
+    let threshold = 0;
+    let scale = 1;
+    let aggregate = 'cosr';
+    let opts = {frameSize, threshold, scale, aggregate};
+    let res = await AutoEncoder.frameSignal(signal, opts);
+    let { frames } = res;
+    should.deepEqual(frames.map(f=>f.slice(0,frameSize)), dataFrames);
+    let frameAggs = dataFrames.map(frame =>
+      frame.reduce(((a,v,i)=>v*Math.cos(2*Math.PI*i/frameSize)), 0)
+    );
+    let aScale = 1/7.5000000000000036; //1/-7.5;
+    let aggSum = frames.reduce(((a,f)=>a+=f[frameSize]), 0);
+    should(Math.abs(aggSum)).above(1.5).below(3);
+  });
+  it("aggFrame() AN9.20_4.3", async()=>{
     let verbose = 0;
     let signal = await wavSignal(AN9_20_4_3_WAV); // longer samples will improve training
     let frameSize = 103;

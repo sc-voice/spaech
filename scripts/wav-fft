@@ -45,6 +45,15 @@ DESCRIPTION
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
+    -bm, --bar-magnitude
+        Maximum bar length (50)
+
+    -sm, --statistics-magnitude
+        Show statistics for magnitudes
+
+    -wf, --window-frequency WINDOW_SIZE FREQUENCY
+        Show frequencies in window of given size centered on given frequency (50,114.8)
+
     -wl, --window-low WINDOW_SIZE
         Show frequencies in window starting with lowest frequency
 
@@ -95,10 +104,18 @@ for (var i = 2; i < nargs; i++) {
   } else if (arg === '-bi' || arg === '--bin-interval') {
     cmdCfg.binInterval = requiredNumber();
     assert(0 < cmdCfg.binInterval, `[E_BIN_INTERVAL] must be 1 or greater: ${cmdCfg.binInterval}`);
+  } else if (arg === '-sm' || arg === '--statistics-magnitude') {
+    cmdCfg.statistics = 'magnitude';
   } else if (arg === '-wl' || arg === '--window-low') {
     cmdCfg.windowLow = requiredNumber();
-  } else if (arg === '-wc' || arg === '--window-centered') {
-    cmdCfg.windowCentered = requiredNumber();
+  } else if (arg === '-bm' || arg === '--bar-magnitude') {
+    cmdCfg.barMagnitude = requiredNumber();
+  } else if (arg === '-wm' || arg === '--window-max') {
+    cmdCfg.windowMax = requiredNumber();
+  } else if (arg === '-wf' || arg === '--window-frequency') {
+    let window = requiredNumber();
+    let frequency = requiredNumber();
+    cmdCfg.windowFrequency = {window, frequency};
   } else if (arg === '-ll' || arg === '--log-level') {
     cmdCfg.logLevel = logger.logLevel = requiredArg();
   } else {
@@ -120,38 +137,58 @@ async function wavSignal(fpath=EVAM_ME_SUTTAM_WAV) {
 
 
 (async function() {
-  let { wavFile, windowCentered, windowLow, binInterval=1 } = cmdCfg;
+  let { 
+    wavFile, 
+    windowMax, 
+    windowLow, 
+    windowFrequency, 
+    binInterval=1, 
+    barMagnitude=100,
+    statistics,
+  } = cmdCfg;
   logger.info(script, argv.slice(2).join(' '));
   assert(wavFile, `[E_WAV_FILE] expected WAV filename`);
   let wavSig = await wavSignal(wavFile);
   let data = [...wavSig.data];
   let log2 = Math.log2(data.length);
   data = data.slice(0, Math.pow(2, Math.floor(log2)));
-  console.log(`data`, wavSig.data.length, log2, data.length)
   let phasors = fft(data);
   let frequencies = fftutil.fftFreq(phasors, 22050);
   let magnitudes = fftutil.fftMag(phasors);
-  let magStats = Signal.stats(magnitudes);
-  console.log(`fft`, magStats);
-  let iStart = 0;
-  let iEnd = frequencies.length;
-  let window = iEnd - iStart;
-  if (windowCentered) {
-    window = windowCentered;
-    iStart = Math.max(0, magStats.iMax - window/2);
-    iEnd = Math.min(frequencies.length, magStats.iMax + window/2);
-  }
-  if (windowLow) {
+  let magStats = Signal.stats(magnitudes.slice(1)); // ignore DC magnitude
+  statistics === 'magnitude' && console.log(`fft magnitudes`, magStats);
+  let binStart = 0;
+  let binEnd = frequencies.length;
+  let window = binEnd - binStart;
+  if (windowMax) {
+    window = windowMax;
+    let w2 = Math.floor(window/2);
+    binStart = Math.max(0, magStats.iMax - w2);
+    binEnd = Math.min(frequencies.length, magStats.iMax + w2);
+    logger.info(`windowMax`, {binStart, binEnd, frequency:magStats.max});
+  } else if (windowLow) {
     window = windowLow;
-    iEnd = iStart + window;
+    binEnd = binStart + window;
+    logger.info(`windowLow`, {binStart, binEnd});
+  } else if (windowFrequency) {
+    let frequency = windowFrequency.frequency;
+    window = windowFrequency.window;
+    let iFreq = frequencies.reduce((a,f,i) => {
+      let df = Math.abs(f-frequency);
+      let dfa = Math.abs(frequencies[a]-frequency);
+      return i === 0 ? 0 : (df < dfa ? i : a);
+    }, 0);
+    let w2 = Math.floor(window/2);
+    binStart = Math.max(0, iFreq - w2);
+    binEnd = Math.min(frequencies.length, iFreq + w2 + 1);
+    logger.info(`windowFrequency`, {binStart, binEnd, frequency});
   }
   let mag = 0;
-  frequencies.slice(iStart, iEnd).forEach((f,i)=>{
-    mag += magnitudes[iStart+i] / magStats.max;
+  frequencies.slice(binStart, binEnd).forEach((f,i)=>{
+    mag += magnitudes[binStart+i] / magStats.max;
     if (i % binInterval === 0) {
       let bar = [];
-      let MAXBAR = 50;
-      let barh = mag * MAXBAR;
+      let barh = mag * barMagnitude;
       for (let i=0; i < barh; i++) {
         bar.push('*');
       }
