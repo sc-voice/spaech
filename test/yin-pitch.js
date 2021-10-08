@@ -12,8 +12,15 @@
     YinPitch,
   } = require('../index');
 
-  const NSAMPLES = 270; // minimum samples for low male voice @ 22050
-  const SAMPLE_RATE = 22050; // 2 * 3 * 3 * 5 * 5 * 7 * 7
+  const FREQ_CHILD = 300;
+  const FREQ_WOMAN = 255;     // adult woman speech 165-255Hz
+  const FREQ_MAN = 85;        // adult male speech 85-155Hz
+  const SAMPLE_RATE = 22050;  // 2 * 3**2 * 5**2 * 7**2
+  const TAU_MIN = Math.round(SAMPLE_RATE/FREQ_CHILD);       // 74
+  const TAU_MIN_ADULT = Math.round(SAMPLE_RATE/FREQ_WOMAN); // 86
+  const TAU_MAX = Math.round(SAMPLE_RATE/FREQ_MAN);         // 259
+  const WINDOW_25MS = Math.round(SAMPLE_RATE * 0.0025);     // 55
+  const MIN_SAMPLES = TAU_MAX+WINDOW_25MS+3;                // 316 
 
   this.timeout(10*1000);
 
@@ -30,19 +37,21 @@
     return [...new Int8Array(n)];
   }
 
-  it("TESTTESTctor()", ()=>{
+  it("TESTTESTdefault ctor()", ()=>{
     let verbose = 0;
-    let window = 10;
+    let window = WINDOW_25MS;
     let sampleRate = 22050; // default
-    let fMin = 85; // male speech low
-    let fMax = 300; // child speech high
-    let tauEnd = Math.round(sampleRate/fMin);
-    let yp = new YinPitch({window});
+    let fMin = FREQ_MAN;
+    let fMax = FREQ_CHILD;
+    let tauMin = TAU_MIN-1;
+    let tauMax = TAU_MAX+2;
+    let diffMax = 0.1; // acceptable ACF difference
+    let yp = new YinPitch();
 
-    should(yp).properties({ window, tauEnd, sampleRate, fMin, fMax});
+    should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax});
   });
   it("TESTTESTautoCorrelate()", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let n = 100;
     let samples = sineWave(700, n);
     let ypa = [
@@ -62,7 +71,7 @@
     should.deepEqual(stats.map(s=>s.iMax), [ 34, 2, 33, 64, 32 ]);
   });
   it("TESTTESTacfDifference()", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let n = 100;
     let Q = 40; // determines arbitrary frequency to be detected
     let f = SAMPLE_RATE / Q;
@@ -87,19 +96,58 @@
     let title=`LEGEND: 1:samples, 2:ACFdifference/10`;
     verbose && (new Chart({title,data:[samples, da[2].map(v=>v/10)]})).plot();
   });
-  it("TESTTESTpitch() sin", ()=>{
-    let verbose = 1;
-    let Q = 40; // determines arbitrary frequency to be detected
-    let f = SAMPLE_RATE / Q;
-    //f = 255;
-    let phase = Math.PI/3; // arbitrary phase
-    let yp = new YinPitch({window: 8});
-    let samples = sineWave(f, NSAMPLES, phase);
-    let pitch = yp.pitch(samples);
-    let title=`LEGEND: 1:samples, 2:ACFdifference/10`;
-    verbose && (new Chart({title,data:[samples],xInterval:4})).plot();
-    verbose && console.log(`pitch`, pitch);
-    should(pitch).equal(f);
+  it("TESTTESTinterpolateParabolic()", ()=>{
+    let a = 2;
+    let b = 3;
+    let c = 4;
+    let fx = x => a*x**2 + b*x + c;
+    let xMin = - b/(2*a);
+    let x = [ xMin-1, xMin+1, xMin+2 ];
+    let y = x.map(x=>fx(x));
+    let xInterp = YinPitch.interpolateParabolic(x,y);
+    should(xInterp).equal(xMin);
+  });
+  it("TESTTESTpitch() sin FREQ_MAN", ()=>{
+    let verbose = 0;
+    let f = FREQ_MAN;
+    let phase = Math.random()*2*Math.PI; 
+    let yp = new YinPitch();
+    let samples = sineWave(f, MIN_SAMPLES, phase);
+    let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
+    let title=`LEGEND: 1:samples, 2:ACFdifference`;
+    verbose && (new Chart({title,data:[acf],xInterval:4})).plot();
+    let error = Math.abs(pitch-f);
+    verbose && console.log(`YIN`, {pitch, pitchEst, error, tau, tauEst});
+    let e = 0.005;
+    should(pitch).above(f-e).below(f+e);
+  });
+  it("TESTTESTpitch() sin FREQ_WOMAN", ()=>{
+    let verbose = 0;
+    let f = FREQ_WOMAN;
+    let phase = Math.random()*2*Math.PI; 
+    let yp = new YinPitch();
+    let samples = sineWave(f, MIN_SAMPLES, phase);
+    let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
+    let title=`LEGEND: 1:samples, 2:ACFdifference`;
+    verbose && (new Chart({title,data:[acf],xInterval:1})).plot();
+    let error = Math.abs(pitch-f);
+    verbose && console.log(`YIN`, {pitch, pitchEst, error, tau, tauEst});
+    let e = 0.01;
+    should(pitch).above(f-e).below(f+e);
+  });
+  it("TESTTESTpitch() sin FREQ_CHILD", ()=>{
+    let verbose = 0;
+    let f = FREQ_CHILD;
+    let phase = Math.random()*2*Math.PI; 
+    let yp = new YinPitch({});
+    let samples = sineWave(f, MIN_SAMPLES, phase);
+    let { pitch, pitchEst, acf, tau, tauEst, } = yp.pitch(samples);
+    let title=`LEGEND: 1:samples, 2:ACFdifference`;
+    let error = Math.abs(pitch-f);
+    verbose && (new Chart({title,data:[acf],xInterval:1})).plot();
+    verbose && console.log(`YIN`, {pitch, pitchEst, error, tau, tauEst});
+    let e = 0.01;
+    should(pitch).above(f-e).below(f+e);
   });
 
 })

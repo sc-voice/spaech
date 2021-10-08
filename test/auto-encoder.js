@@ -261,7 +261,7 @@
     console.log(`mse`, mse.dataSync());
     should.deepEqual(mse2.dataSync(), mse.dataSync());
   });
-  it("aggFrame()", async()=>{
+  it("TESTTESTaggFrame()", async()=>{
     let dataFrames = [[-10,-5,-1], [0,1,5], [0,5,10]];
     let signal = new Signal(dataFrames.flat());
     let frameSize = 3;
@@ -283,23 +283,6 @@
     should.deepEqual(
       frames.map(f=>f.slice(frameSize)), 
       dataFrames.map(frame=>[aScale*frame.reduce(((a,v,i)=>v*Math.cos(2*Math.PI*i/frameSize)+a), 0)])
-    );
-
-    aggregate = 'cos_0';
-    opts.aggregate = aggregate;
-    opts.output = false;
-    res = await AutoEncoder.frameSignal(signal, opts);
-    frames = res.frames;
-    should.deepEqual(
-      frames.map(f=>f.slice(frameSize)), 
-      dataFrames.map(frame=>[aScale*frame.reduce(((a,v,i)=>v*Math.cos(2*Math.PI*i/frameSize)+a), 0)])
-    );
-    opts.output = true;
-    res = await AutoEncoder.frameSignal(signal, opts);
-    frames = res.frames;
-    should.deepEqual(
-      frames.map(f=>f.slice(frameSize)), 
-      dataFrames.map(frame=>[0])
     );
   });
   it("aggFrame() cosr", async()=>{

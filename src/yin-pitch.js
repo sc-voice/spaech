@@ -4,6 +4,14 @@
   const Compander = require('./compander');
   const Int16Frames = require(`./int16-frames`);
   const Signal = require('./signal');
+  const FREQ_CHILD = 300;
+  const FREQ_WOMAN = 255;     // adult woman speech 165-255Hz
+  const FREQ_MAN = 85;        // adult male speech 85-155Hz
+  const SAMPLE_RATE = 22050;  // 2 * 3**2 * 5**2 * 7**2
+  const TAU_MIN = Math.round(SAMPLE_RATE/FREQ_CHILD);       // 74
+  const TAU_MIN_ADULT = Math.round(SAMPLE_RATE/FREQ_WOMAN); // 86
+  const TAU_MAX = Math.round(SAMPLE_RATE/FREQ_MAN);         // 259
+  const WINDOW_25MS = Math.round(SAMPLE_RATE * 0.0025);      // 55
 
   // http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf
 
@@ -11,22 +19,33 @@
     constructor(args={}) {
       let {
         sampleRate = 22050,
-        tauEnd,
-        window,
-        fMin = 85, // male speech low
-        fMax = 300, // child speech high
+        diffMax = 0.1,
+        window = WINDOW_25MS,
+        fMin = FREQ_MAN,
+        fMax = FREQ_CHILD,
       } = args;
       assert(Number.isInteger(window) && 0<window, 
         `[E_WINDOW] window size must be positive integer:${window}`);
-      tauEnd = tauEnd || Math.round(sampleRate/fMin);
 
       Object.assign(this, {
+        diffMax,
         fMin,
         fMax,
         sampleRate,
-        tauEnd,
+        tauMin: Math.round(sampleRate/fMax)-1,
+        tauMax: Math.round(sampleRate/fMin)+2,
         window,
       });
+    }
+
+    static interpolateParabolic(x,y) {
+      let x10 = x[1] - x[0];
+      let x12 = x[1] - x[2];
+      let y10 = y[1] - y[0];
+      let y12 = y[1] - y[2];
+      let numerator = x10**2 * y12 - x12**2 * y10;
+      let denominator = x10*y12 - x12*y10;
+      return x[1] - 0.5 * numerator / denominator;
     }
 
     autoCorrelate(samples, t, tau) {
@@ -43,25 +62,38 @@
     }
 
     acfDifference(samples, t, tau) {
-      return this.autoCorrelate(samples, t,0) + this.autoCorrelate(samples, t+tau, 0) 
-        - 2*this.autoCorrelate(samples, t, tau);
+      return (
+        this.autoCorrelate(samples, t,0) 
+        + this.autoCorrelate(samples, t+tau, 0) 
+        - 2*this.autoCorrelate(samples, t, tau)
+      )
     }
 
     pitch(samples) {
       assert(Array.isArray(samples) && 0<samples.length, `[E_SAMPLES] expected signal samples`);
-      let { window, tauEnd, sampleRate } = this;
-      let diffs = [];
+      let { window, tauMin, tauMax, sampleRate, diffMax } = this;
+      let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
       let t = 0;
-      let a = undefined;
-      for (let tau = 0; tau < tauEnd; tau++) {
+      let tauEst = undefined;
+      for (let tau = tauMin; tau < tauMax; tau++) {
         let v = this.acfDifference(samples, t, tau);
-        diffs.push(v);
-        if (a==null || (diffs[tau] < diffs[a])) {
-          a = tau || undefined;
+        acf.push(v);
+        if (tauEst==null || tau < tauMin) {
+          tauEst = tauMin <= tau ? tau : undefined;
+        } else if (acf[tau] < acf[tauEst]) {
+          tauEst = tau || undefined;
+        } else if (acf[tauEst] <= diffMax) {
+          break;
         }
       }
 
-      return sampleRate/a;
+      let x = [ tauEst-1, tauEst, tauEst+1 ];
+      let y = x.map(x=>acf[x]);
+      let tau = YinPitch.interpolateParabolic(x,y);
+      let pitch = sampleRate/tau;
+      let pitchEst = sampleRate/tauEst;
+
+      return { acf, pitch, pitchEst, tau, tauEst };
     }
 
   }
