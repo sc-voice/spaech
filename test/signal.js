@@ -148,7 +148,7 @@
     should(splitBlocks.length).equal(3);
   });
   it("WAV files", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let buf = await fs.promises.readFile(AN9_20_4_3);
     let sig = await Signal.fromWav(buf);
     let { data:s16 } = sig;
@@ -196,7 +196,7 @@
     let wf = new WaveFile(buf);
     let samples = wf.getSamples(false, Int16Array);
     let msStart;
-    let verbose = 1;
+    let verbose = 0;
     let statsExpected = (data)=>{
       let itData = Signal.toIterator(data);
       let min;
@@ -237,7 +237,7 @@
     should(stats2).properties(stats1);
   });
   it("WAV split AN9_20_4_3 audio", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let buf = await fs.promises.readFile(AN9_20_4_3);
     let sig = Signal.fromWav(buf);
     let { data: s16 } = sig;

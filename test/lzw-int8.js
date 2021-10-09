@@ -113,7 +113,7 @@
     it("train(...) => glossary",()=>{
       let glossary = [0,1,2,3,0,1];
       let lzw = new LzwInt8({glossary});
-      let opts = {verbose:false};
+      let opts = {verbose:0};
 
       //for (let kv of lzw.dict) { console.log(`lzw`, kv); }
       should.deepEqual(lzw.glossary, new Int8Array([0,1,2,3,0,1]));
@@ -126,7 +126,7 @@
     it("train(...) => glossary",()=>{
       let glossary = [0,1,2,3];
       let lzw = new LzwInt8({glossary});
-      let opts = {verbose:true};
+      let opts = {verbose:0};
 
       let lzwTrained = lzw.train([0,1,0,1]);
       //for (let kv of lzw.dict) { console.log(`trained1`, kv); }

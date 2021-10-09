@@ -126,7 +126,7 @@
     should.deepEqual(decode2b,             [ 0,  0,  0,  0, 32, 32, 32, 32]);
   });
   it ("encodeFrames(...) MDCT coefficients => data[1]", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let frameSize = 8;
     let nCoeffs = frameSize/2;
     let data = new Int16Array([ -10, 8, -4, 2, 0, 0, 0, 0 ]); // ends with zeros
@@ -221,7 +221,7 @@
   it ("encodeFrames/decodeFrames(...) 3 blocks => 1 frame", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
-    let verbose = 1;
+    let verbose = 0;
     let frames = [
       [-10,-10,-10,-10, 10,10,10,10,],
       [-6,-6,-6,-6, 6,6,6,6,],
@@ -253,7 +253,7 @@
   it ("encodeTriBlocks(...) 3 blocks => 1 frame", ()=>{
     let frameSize = 8;
     let nCoeffs = frameSize/2;
-    let verbose = 1;
+    let verbose = 0;
     let frames = [
       [-10,-10,-10,-10, 10,10,10,10,],
       [-6,-6,-6,-6, 6,6,6,6,],
@@ -341,7 +341,7 @@
     should(nums.buffer.byteLength).equal(5);
   });
   it ("encode(...) coefficients same size as data", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let frameSize = 8;
     let type = Float32Array;
     let nCoeffs = frameSize/2;
@@ -359,7 +359,7 @@
     should(encoded.length).equal(data.length);
   });
   it ("encode/decode() EVAM_ME_SUTTAM", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let signal = await wavSamples(EVAM_ME_SUTTAM);
     for (let i=0; i<Mdct.WINDOWS.length; i++) {
       let window = Mdct.WINDOWS[i];

@@ -76,7 +76,7 @@
     });
   });
   it("frameSignal() ", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let frameSize = 4;
     let scale = 0.1;
     let data = [1,2,3,4,5,6,7];
@@ -140,7 +140,7 @@
     should.deepEqual([...i16.map(v=>v/3)], [0, 0, 1]);  // Trunc
   });
   it("transform(...)", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let sigIn = await wavSignal(EVAM_ME_SUTTAM_WAV);
     const SCALE = 2;
     let scaleIn = 2;

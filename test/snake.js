@@ -30,7 +30,7 @@
     should(Snake.isNode).equal(true);
   });
   it("Activation", async()=>{
-    let verbose = 1;
+    let verbose = 0;
     let act = new Snake.Activation();
     let n = 20;
     let v = new Float32Array(n+1).map((v,i)=>i/10);
@@ -45,6 +45,7 @@
     }
   });
   it("snake sine", async()=>{
+    let verbose = 0;
     let TRAIN = 1;
     if (!TRAIN) { return; }
     let nSamp = 192;  // MDCT frameSize
@@ -99,7 +100,7 @@
     console.log(`history loss:`, history.history.loss.slice(-1));
     let testTruth = [100,200,300].map(fSig=>({fSig, nSamp}));
     let testSignals = testTruth.map(tt=>sineSignal(tt));
-    chart.plot({data: testSignals, title:"Test Signals"});
+    verbose && chart.plot({data: testSignals, title:"Test Signals"});
     let testX = tf.tensor2d(testSignals);
     let predict = model.predict(testX).arraySync();
     testTruth.forEach((tt,i)=>{

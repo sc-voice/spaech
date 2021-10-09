@@ -11,7 +11,7 @@
   const TAU_MIN = Math.round(SAMPLE_RATE/FREQ_CHILD);       // 74
   const TAU_MIN_ADULT = Math.round(SAMPLE_RATE/FREQ_WOMAN); // 86
   const TAU_MAX = Math.round(SAMPLE_RATE/FREQ_MAN);         // 259
-  const WINDOW_25MS = Math.round(SAMPLE_RATE * 0.0025);      // 55
+  const WINDOW_25MS = Math.round(SAMPLE_RATE * 0.025);      // 551
 
   // http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf
 
@@ -27,15 +27,37 @@
       assert(Number.isInteger(window) && 0<window, 
         `[E_WINDOW] window size must be positive integer:${window}`);
 
+      let tauMax = Math.round(sampleRate/fMin)+1; // allow for interpolation
+
       Object.assign(this, {
         diffMax,
         fMin,
         fMax,
         sampleRate,
-        tauMin: Math.round(sampleRate/fMax)-1,
-        tauMax: Math.round(sampleRate/fMin)+2,
+        tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
+        tauMax,
         window,
       });
+    }
+
+    static sineWave(args={}) {
+      let {
+        frequency, 
+        nSamples, 
+        phase=0, 
+        sampleRate=22050,
+        sustain=1,
+      } = args;
+
+      let samples = [];
+      let level = sustain;
+      for (let t = 0; t < nSamples; t++) {
+        let v = level * Math.sin(2*Math.PI*frequency*t/sampleRate+phase);
+        samples.push(v);
+        level *= sustain;
+      }
+
+      return samples;
     }
 
     static interpolateParabolic(x,y) {
@@ -45,6 +67,10 @@
       let y12 = y[1] - y[2];
       let numerator = x10**2 * y12 - x12**2 * y10;
       let denominator = x10*y12 - x12*y10;
+      if (denominator === 0) {
+        logger.warn(`zero denominator`, {x,y, x10,y12, x12, y10});
+        return (x[0]+x[1]+x[2])/3;
+      }
       return x[1] - 0.5 * numerator / denominator;
     }
 
@@ -72,23 +98,32 @@
     pitch(samples) {
       assert(Array.isArray(samples) && 0<samples.length, `[E_SAMPLES] expected signal samples`);
       let { window, tauMin, tauMax, sampleRate, diffMax } = this;
+      let minSamples = tauMax + window + 1;
+      assert(minSamples <= samples.length, 
+        `[E_NSAMPLES] samples expected:${minSamples} actual:${samples.length}`);
       let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
       let t = 0;
       let tauEst = undefined;
-      for (let tau = tauMin; tau < tauMax; tau++) {
+      for (let tau = tauMin; ; tau++) {
         let v = this.acfDifference(samples, t, tau);
+        assert(!isNaN(v), `[E_NAN_ACFDIFF] t:${t} tau:${tau}`);
         acf.push(v);
-        if (tauEst==null || tau < tauMin) {
-          tauEst = tauMin <= tau ? tau : undefined;
+        if (tau >= tauMax) {
+          break;
+        }
+        if (tauEst==null) {
+          tauEst = tauMin < tau ? tau : undefined;
         } else if (acf[tau] < acf[tauEst]) {
           tauEst = tau || undefined;
-        } else if (acf[tauEst] <= diffMax) {
+        } else if (acf[tauEst] <= diffMax && acf[tau-1] <= diffMax) {
           break;
         }
       }
 
       let x = [ tauEst-1, tauEst, tauEst+1 ];
       let y = x.map(x=>acf[x]);
+      assert(!isNaN(y[0]), `[E_NAN_ACF] x:${tauEst-1} tauMin:${tauMin} tauMax:${tauMax}`);
+      assert(!isNaN(y[2]), `[E_NAN_ACF] x:${tauEst+1} tauMin:${tauMin} tauMax:${tauMax}`);
       let tau = YinPitch.interpolateParabolic(x,y);
       let pitch = sampleRate/tau;
       let pitchEst = sampleRate/tauEst;
