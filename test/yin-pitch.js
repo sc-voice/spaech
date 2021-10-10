@@ -41,10 +41,11 @@
     let fMax = FREQ_CHILD;
     let tauMin = TAU_MIN;
     let tauMax = TAU_MAX;
+    let minSamples = window + tauMax + 1;
     let diffMax = 0.1; // acceptable ACF difference
     let yp = new YinPitch();
 
-    should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax});
+    should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
   });
   it("autoCorrelate()", ()=>{
     let verbose = 0;

@@ -18,11 +18,12 @@
   class YinPitch {
     constructor(args={}) {
       let {
-        sampleRate = 22050,
         diffMax = 0.1,
-        window = WINDOW_25MS,
-        fMin = FREQ_MAN,
         fMax = FREQ_CHILD,
+        fMin = FREQ_MAN,
+        minPower = 0,
+        sampleRate = 22050,
+        window = WINDOW_25MS,
       } = args;
       assert(Number.isInteger(window) && 0<window, 
         `[E_WINDOW] window size must be positive integer:${window}`);
@@ -31,11 +32,12 @@
 
       Object.assign(this, {
         diffMax,
-        fMin,
         fMax,
+        fMin,
+        minPower,
         sampleRate,
-        tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
         tauMax,
+        tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
         window,
       });
     }
@@ -46,9 +48,9 @@
         nSamples, 
         phase=0, 
         sampleRate=22050,
+        scale=1,
         sustain=1,
         type=Array,
-        scale=1,
       } = args;
 
       let samples = type === Array
@@ -78,6 +80,11 @@
       return x[1] - 0.5 * numerator / denominator;
     }
 
+    get minSamples() {
+      let { window, tauMax, } = this;
+      return tauMax + window + 1;
+    }
+
     autoCorrelate(samples, t, tau) {
       let { window} = this;
       assert(0<=t && t+window+tau<samples.length, 
@@ -92,25 +99,30 @@
     }
 
     acfDifference(samples, t, tau) {
-      return (
-        this.autoCorrelate(samples, t,0) 
-        + this.autoCorrelate(samples, t+tau, 0) 
-        - 2*this.autoCorrelate(samples, t, tau)
-      )
+      let acft0 = this.autoCorrelate(samples, t, 0);
+      let acftau0 = this.autoCorrelate(samples, t+tau, 0); 
+      let acfttau = this.autoCorrelate(samples, t, tau);
+      return acft0 + acftau0 - 2*acfttau;
     }
 
     pitch(samples) {
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
-      let { window, tauMin, tauMax, sampleRate, diffMax } = this;
-      let minSamples = tauMax + window + 1;
+      let { minPower, minSamples, window, tauMin, tauMax, sampleRate, diffMax } = this;
       assert(minSamples <= samples.length, 
         `[E_NSAMPLES] samples expected:${minSamples} actual:${samples.length}`);
       let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
       let t = 0;
+      let result = { acf, pitch:0, pitchEst:0, tau:0, tauEst:0 };
+      let acft0 = this.autoCorrelate(samples, t, 0);
+      if (acft0/window < minPower) {
+        return result;
+      }
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
-        let v = this.acfDifference(samples, t, tau);
+        let acftau0 = this.autoCorrelate(samples, t+tau, 0); 
+        let acfttau = this.autoCorrelate(samples, t, tau);
+        let v = acft0 + acftau0 - 2*acfttau;
         assert(!isNaN(v), `[E_NAN_ACFDIFF] t:${t} tau:${tau}`);
         acf.push(v);
         if (tau >= tauMax) {
@@ -130,10 +142,11 @@
       assert(!isNaN(y[0]), `[E_NAN_ACF] x:${tauEst-1} tauMin:${tauMin} tauMax:${tauMax}`);
       assert(!isNaN(y[2]), `[E_NAN_ACF] x:${tauEst+1} tauMin:${tauMin} tauMax:${tauMax}`);
       let tau = YinPitch.interpolateParabolic(x,y);
-      let pitch = sampleRate/tau;
-      let pitchEst = sampleRate/tauEst;
-
-      return { acf, pitch, pitchEst, tau, tauEst };
+      result.tau = tau;
+      result.tauEst = tauEst;
+      result.pitch = sampleRate/tau;
+      result.pitchEst = sampleRate/tauEst;
+      return result;
     }
 
   }

@@ -56,6 +56,9 @@ DESCRIPTION
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
+    -mp, --min-power
+        Minimum signal power for pitch recognition (128)
+
     -si, --signal-in WAV_FILE
         Input signal 
 
@@ -110,6 +113,8 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.fMax = requiredNumber();
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = requiredNumber();
+  } else if (arg === '-mp' || arg === '--min-power') {
+    cmdCfg.minPower = requiredNumber();
   } else if (arg === '-si' || arg === '--signal-in') {
     cmdCfg.signalIn = requiredArg();
   } else if (arg === '-ll' || arg === '--log-level') {
@@ -150,6 +155,7 @@ async function configuration(cfg=cmdCfg) {
     fMax: 300,
     frameSize: 192,
     logLevel: 'info',
+    minPower: 1,
     signalIn,
     verbose: false,
     window: 551,
@@ -209,6 +215,7 @@ function inputsOfFrames(frames, inputSize) {
     fMin,
     fMax,
     frameSize,
+    minPower,
     signalIn, 
     window,
 
@@ -217,8 +224,25 @@ function inputsOfFrames(frames, inputSize) {
   logger.info(`command options parsed as`, cfg);
 
   let sigIn = await wavSignal(signalIn);
-  let { sampleRate } = sigIn;
-  let yp = new YinPitch({sampleRate, diffMax, fMin, fMax, window});
+  let { data:sigData, sampleRate } = sigIn;
+  let yp = new YinPitch({sampleRate, diffMax, fMin, fMax, window, minPower});
+  let nSamples = Math.ceil(yp.minSamples / frameSize) * frameSize;
+  console.log(`DBG`, {nSamples, sigData:sigData.length});
+
+  let power = [];
+  let f0 = [];
+  for (let i = 0; i < sigData.length; i += frameSize) {
+    let samples = sigData.subarray(i, i+nSamples);
+    if (samples.length === nSamples) {
+      let { pitch } = yp.pitch(samples);
+      f0.push(pitch);
+      //power.push(yp.autoCorrelate(samples, 0, 0)/nSamples);
+    } else {
+      logger.debug(`discarding partial samples[${i}]:${samples.length}`);
+    }
+  }
+  let chart = new Chart({lines:chartLines});
+  chart.plot({ title:`1:f0, 2:power`, data:[f0], xInterval:4 });
 
   let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
 
