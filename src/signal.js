@@ -6,16 +6,24 @@
   class Signal {
     constructor(data, opts={}) {
       logger.logInstance(this);
+      let {
+        sampleRate,
+      } = opts;
       if (data == null) {
         throw this.error('E_SIGNAL_ARRAY', 'Audio data signal array is required');
       }
-      this.data = data;
+
+      Object.assign(this, {
+        data,
+        sampleRate,
+      });
     }
 
     static fromWav(buf) {
       let wf = new WaveFile(buf);
       let data = wf.getSamples(false, Int16Array);
-      return new Signal(data);
+      let { sampleRate } = wf.fmt;
+      return new Signal(data, {sampleRate});
     }
 
     static toInt16Array(data) {

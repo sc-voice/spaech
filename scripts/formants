@@ -1,0 +1,226 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert')
+const { exec, execSync } = require('child_process');
+const { logger } = require('log-instance');
+const tf = require('@tensorflow/tfjs-node');
+const { WaveFile } = require('wavefile');
+const {
+  Chart,
+  Signal,
+  YinPitch,
+} = require('../index');
+
+const APP_DIR = path.dirname(__dirname);
+const TEST_DATA_DIR = path.join(APP_DIR, 'test/data');
+const EVAM_ME_SUTTAM_WAV = path.join(TEST_DATA_DIR, 'evam-me-suttam.wav');
+const AN9_20_4_3_WAV = path.join(TEST_DATA_DIR, 'an9.20_4.3.wav');
+const argv = process.argv;
+const script = argv[1].split('/').pop();
+const SOUND_END = path.join(APP_DIR, 'static/training-end.mp3');
+const SOUND_SUCCESS = path.join(APP_DIR, 'static/training-success.mp3');
+const SOUND_FAILURE = path.join(APP_DIR, 'static/training-failure.mp3');
+const SOUND_ADJUST = path.join(APP_DIR, 'static/training-adjust.mp3');
+
+function help() {
+    console.log(`
+NAME
+        formants - audio formant analyser
+
+SYNOPSIS
+        formants [OPTIONS] 
+        formants -si INPUT_WAV 
+
+DESCRIPTION
+        Speech formant analyser detects F0, F1, F2 for given WAV signal.
+
+    -cl, --chart-lines N
+        Number of lines used to chart worst signal mismatch (15)
+
+    -?, --help
+        Print help
+
+    -ad, --acf-diff
+        Maximum ACF difference threshold (0.1);
+
+    -fb, --frequency-band FMIN FMAX
+        Minimum and maximium speech frequenciesy recognized (85 300).
+        Male speech is in the 85-150Hz band.  Female speech is in the 160-255Hz band.
+        Child speech is at 300 Hz.
+
+    -fs, --frame-size
+        Input is broken up into frames.
+
+    -ll, --log-level
+        Logging level: warn, error, [info], debug
+
+    -si, --signal-in WAV_FILE
+        Input signal 
+
+    -wi, --window
+        Auto-correlation window size (551)
+`);
+    process.exit(0);
+}
+
+function playSound(sound) {
+  let cmd = `ffplay -nodisp -autoexit -loglevel error -stats ${sound}`;
+  execSync(cmd, {
+    cwd: APP_DIR,
+  });
+}
+
+function die(e) {
+  playSound(SOUND_FAILURE);
+  process.exit(-1);
+}
+
+var cmdCfg = {};
+
+var nargs = argv.length;
+if (nargs < 3) {
+    help();
+}
+for (var i = 2; i < nargs; i++) {
+  var arg = argv[i];
+  let requiredArg = ()=>{
+    let nextArg = argv[++i];
+    if (nextArg == null) {
+      die(logger.error('E_REQUIRED', `Expected additional information for: ${arg}`));
+    }
+    return nextArg;
+  }
+  let requiredNumber = ()=>{
+    let n = Number(requiredArg());
+    if (isNaN(n)) {
+      die(logger.error(`[E_NUMBER] "${argv[i-1]}" option requires a number:${argv[i]}`));
+    }
+    return n;
+  }
+  if (i<2) { continue; }
+  if (arg === '-?' || arg === '--help') {
+    help();
+    cmdCfg.signalExpected = requiredArg();
+  } else if (arg === '-ad' || arg === '--acf-diff') {
+    cmdCfg.diffMax = requiredNumber();
+  } else if (arg === '-fb' || arg === '--frequency-band') {
+    cmdCfg.fMin = requiredNumber();
+    cmdCfg.fMax = requiredNumber();
+  } else if (arg === '-fs' || arg === '--frame-size') {
+    cmdCfg.frameSize = requiredNumber();
+  } else if (arg === '-si' || arg === '--signal-in') {
+    cmdCfg.signalIn = requiredArg();
+  } else if (arg === '-ll' || arg === '--log-level') {
+    cmdCfg.logLevel = logger.logLevel = requiredArg();
+  } else if (arg === '-wi' || arg === '--window') {
+    cmdCfg.window = requiredNumber();
+  } else {
+    die(logger.error('E_UNKNOWN_OPTION', `Unknown option: ${argv[i]}`));
+  }
+}
+
+async function wavSignal(fpath) {
+  assert(fpath, `Expected signal file path: ${fpath}`);
+  let buf = await fs.promises.readFile(fpath);
+  let wf = new WaveFile(buf);
+  //let wavSig = new Signal(wf.getSamples(false, Int16Array));
+  let wavSig = Signal.fromWav(buf);
+  let { sampleRate } = wavSig;
+  let stats = wavSig.stats();
+  logger.debug(`wavSignal`, fpath, stats);
+  logger.info(`wavSignal() ${fpath} =>`, `max:`, stats.max, `count:`, stats.count,
+    `sampleRate:`, sampleRate);
+
+  return wavSig;
+}
+
+async function configuration(cfg=cmdCfg) {
+  let { 
+    signalIn, 
+  } = cfg;
+
+  assert(fs.existsSync(signalIn), `[E_SIGNAL_IN] file not found:${signalIn}`);
+
+  return Object.assign({}, {
+    chartLines: 15,
+    diffMax: 0.1,
+    fMin: 85,
+    fMax: 300,
+    frameSize: 192,
+    logLevel: 'info',
+    signalIn,
+    verbose: false,
+    window: 551,
+
+  }, cfg, {
+  });
+}
+
+async function chartWorst({model, inputs, outputs, stats, chartLines}) {
+  let { iMax, max, avg }  = stats;
+  assertNumbers(inputs, `[E_CHART_NAN] inputs`);
+  let xtest = tf.tensor2d(inputs.slice(iMax,iMax+1));
+  let ytest = await model.predict(xtest);
+  let chart = new Chart();
+  chart.plot({
+    data: [[...ytest.dataSync()], outputs[iMax]], 
+    title:`Worst frame:${iMax} mse:${max.toExponential(8)} mseAvg:${avg.toExponential(8)} 1:expected 2:actual`,
+    lines: chartLines,
+  });
+}
+
+async function writeSignal(fpath, signal) {
+  if (fpath.endsWith('.wav')) {
+    let wav = signal.toWav();
+    try {
+      await fs.promises.writeFile(fpath, wav);
+      logger.info(`writing signal: ${fpath} length: ${wav.length}`);
+    } catch(e) {
+      die(logger.error(`Could not write: ${fpath}`, e.message));
+    }
+  } else {
+    die(logger.error('E_FILE_UNSUPPORTED', `Unsupported file type: ${fpath}`));
+  }
+}
+
+function inputsOfFrames(frames, inputSize) {
+  let frameSize = frames[0].length;
+  let wavFrames = Math.ceil(inputSize / frameSize);
+  let iEnd = frames.length - 1;
+  let inputs = frames.map((f,i) => {
+    let inputRow = [];
+    for (let j=i; j < i+wavFrames; j++) {
+      let fj = frames[j] || new Float32Array(frameSize);
+      inputRow = inputRow.concat([...fj]);
+    }
+    return inputRow;
+  });
+  return inputs;
+}
+
+(async function() {
+  let cfg = await configuration(cmdCfg);
+  let msStart = Date.now();
+  let { 
+    chartLines,
+    diffMax,
+    fMin,
+    fMax,
+    frameSize,
+    signalIn, 
+    window,
+
+  } = cfg;
+  logger.info(script, argv.slice(2).join(' '));
+  logger.info(`command options parsed as`, cfg);
+
+  let sigIn = await wavSignal(signalIn);
+  let { sampleRate } = sigIn;
+  let yp = new YinPitch({sampleRate, diffMax, fMin, fMax, window});
+
+  let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
+
+  process.exit(0);
+})();
