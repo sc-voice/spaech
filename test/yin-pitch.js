@@ -166,13 +166,15 @@
     should(pitch).above(frequency-e).below(frequency+e);
     should(pitch).above(frequency-e).below(frequency+e);
   });
-  it("TESTTESTpitch() sin FREQ_CHILD", ()=>{
+  it("TESTTESTpitch() sin FREQ_CHILD (scale, typedarray)", ()=>{
     let verbose = 0;
     let frequency = FREQ_CHILD;
     let phase = Math.random()*2*Math.PI; 
     let nSamples = MIN_SAMPLES;
     let sustain = 0.999;
-    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain });
+    let type = Int16Array;
+    let scale = 16384;
+    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain, scale, type });
     let yp = new YinPitch({});
     let { pitch, pitchEst, acf, tau, tauEst, } = yp.pitch(samples);
     let title=`LEGEND: 1:samples, 2:ACFdifference`;

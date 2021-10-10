@@ -47,13 +47,17 @@
         phase=0, 
         sampleRate=22050,
         sustain=1,
+        type=Array,
+        scale=1,
       } = args;
 
-      let samples = [];
+      let samples = type === Array
+         ? [...new Int8Array(nSamples)]
+         : new type(nSamples);
       let level = sustain;
       for (let t = 0; t < nSamples; t++) {
-        let v = level * Math.sin(2*Math.PI*frequency*t/sampleRate+phase);
-        samples.push(v);
+        let v = level * scale * Math.sin(2*Math.PI*frequency*t/sampleRate+phase);
+        samples[t] = v;
         level *= sustain;
       }
 
@@ -96,7 +100,8 @@
     }
 
     pitch(samples) {
-      assert(Array.isArray(samples) && 0<samples.length, `[E_SAMPLES] expected signal samples`);
+      assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
+        `[E_SAMPLES] expected signal samples`);
       let { window, tauMin, tauMax, sampleRate, diffMax } = this;
       let minSamples = tauMax + window + 1;
       assert(minSamples <= samples.length, 

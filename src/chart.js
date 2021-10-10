@@ -30,12 +30,14 @@
     }
 
     stats(data=[]) {
-      if (!Array.isArray(data[0])) { data = [data]; }
+      if (!Array.isArray(data[0]) && !ArrayBuffer.isView(data[0])) {
+        data = [data];
+      }
       let width = data.reduce((a,d)=> Math.max(a, d.length), 0);
       let data0 = data[0][0];
-      let stats = data.reduce((ad,ds)=>{
-        return ds.reduce((a,d,i) => {
-          assert(!isNaN(d), `Expected number for ds[${i}]:${d}`);
+      let stats = data.reduce((ad,ds,i)=>{
+        return ds.reduce((a,d,j) => {
+          assert(!isNaN(d), `Expected number for ds[${j}]:${d}`);
           a.min = Math.min(d, a.min);
           a.max = Math.max(d, a.max);
           return a;
@@ -86,7 +88,9 @@
         transpose=false,
       } = args;
       let {precision, lineLength} = this;
-      if (!Array.isArray(data[0])) { data = [data]; }
+      if (!Array.isArray(data[0]) && !ArrayBuffer.isView(data[0])) {
+        data = [data];
+      }
       data = data.map(ds=>ds.filter((v,i) => i%xInterval === 0));
       let { min, max, range, width } = this.stats(data);
       assert(!isNaN(min), `expected min for data${data}`);
