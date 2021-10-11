@@ -8,6 +8,7 @@
   } = require('../index');
 
   let {
+    Mdct,
     Signal,
     YinPitch,
   } = require('../index');
@@ -187,6 +188,30 @@
       frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
       window: yp.window, tauMin: yp.tauMin, tauMax: yp.tauMax, });
     should(error).below(0.08); // error rate decreases with frequency
+  });
+  it("frequencies", async()=>{
+    // TODO: delete after 2021.10.11
+    let verbose = 0;
+    let frequency = 7*160;
+    let phase = 2*Math.PI*0.25;
+    let nSamples = MIN_SAMPLES;
+    let sustain = 1;
+    let scale = 16384;
+    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain, scale, type:Int16Array });
+
+    let frameSize = 192;
+    let nFrames = Math.floor((samples.length + frameSize-1)/frameSize);
+    should(nFrames).equal(5);
+    let FINAL_ENCODING_BLOCK = 1; // required if signal ends with less than frameSize/2 zeros
+    let nCoeffBlocks = 2*nFrames + FINAL_ENCODING_BLOCK;
+    let type = Float32Array;
+    let mdct = new Mdct({frameSize});
+    let encodedGen = mdct.encodeFrames(samples, {type:Float32Array});
+    let encoded = [...encodedGen];
+    console.log(`encoded`, {length:encoded.length, first:encoded[0].slice(0,50)});
+    let chart = new Chart();
+    chart.plot({data:[encoded[0]]});
+    chart.plot({data:[samples.slice(-96)], xInterval:1});
   });
 
 })

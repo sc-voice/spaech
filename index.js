@@ -5,6 +5,7 @@ module.exports = {
   Int16Frames: require('./src/int16-frames'),
   LzwInt8: require('./src/lzw-int8'),
   Mdct: require('./src/mdct'),
+  Resonator: require('./src/resonator'),
   Signal: require('./src/signal'),
   Snake: require('./src/snake'),
   WordWindow: require('./src/word-window'),
