@@ -55,7 +55,7 @@
     let { pitch } = yp.pitch(x);
     console.log({pitch});
   });
-  it("TESTTESTresonate() one or many", ()=>{
+  it("resonate() one or many", ()=>{
     let verbose = 0;
     let r1 = new Resonator();
     let r2 = new Resonator();
@@ -72,27 +72,27 @@
     should(stats).properties({iMax:358, max:0.8320586576302439});
   });
   it("TESTTESTresonate() changes frequency", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let r1 = new Resonator({r:0.99});
     let nSamples = 400;
     // resonate can be single-stepped
     let xInterval = 4;
-    let frequency1 = 220.5;
-    let frequency2 = Number((2*frequency1).toFixed(1));
-    let s1 = r1.resonate({nSamples, frequency1, });
-    //should(r1).properties({ frequency:frequency2, t:1*nSamples});
+    let f1 = 220;
+    let f2 = Number((1.2*f1).toFixed(1));
+    let s1 = r1.resonate({nSamples, frequency:f1, scale:1});
+    should(r1).properties({ frequency:f1, t:1*nSamples});
     let chart = new Chart();
-    verbose && chart.plot({title: `resonate ${frequency1}...${frequency2} Hz`, data:[s1], xInterval});
+    verbose && chart.plot({title: `resonate $ f1}...${f2} Hz`, data:[s1], xInterval});
 
-    let s2 = r1.resonate({nSamples, frequency1: frequency2});
-    verbose && chart.plot({title: `resonate ${frequency2} Hz`, data:[s2], xInterval});
-    should(r1).properties({ frequency:frequency2, t:2*nSamples});
+    let s2 = r1.resonate({nSamples, frequency:f2});
+    verbose && chart.plot({title: `resonate ${f2} Hz`, data:[s2], xInterval});
+    should(r1).properties({ frequency:f2, scale:1, t:2*nSamples});
 
-    let s3 = r1.resonate({nSamples, scale1:0});
+    let s3 = r1.resonate({nSamples, scale:0});
     verbose && chart.plot({title:`resonate scale:0`, data:[s3], xInterval});
     let stats = Signal.stats(s1);
     //should(stats).properties({iMax:358, max:0.8320586576302439});
-    should(r1).properties({ frequency: frequency2, t:3*nSamples});
+    should(r1).properties({ frequency:f2, scale:0, t:3*nSamples});
   });
 
 })

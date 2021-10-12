@@ -13,6 +13,7 @@
         y2=this.y2,         // output at t-2
         x1=this.x1,         // input at t-1
         x2=this.x2,         // input at t-2
+        scale = 1,          /// peak amplitude
         t=0,
       } = opts;
       assert(1 < sampleRate, `[E_SAMPLERATE_NAN] expected positive number`);
@@ -25,7 +26,9 @@
 
       let samplePeriod = 1/sampleRate;
 
-      Object.assign(this, { r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, t, });
+      Object.assign(this, { 
+        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, 
+      });
     }
 
     static sineWave(args={}) {
@@ -83,21 +86,19 @@
     resonate(opts={}) {
       let {
         sampleRate,
-        frequency,
+        frequency: frequency1,
+        scale: scale1,
+        r: r1,
       } = this;
       let {
-        frequency1 = frequency,
+        frequency: frequency2 = frequency1,
+        scale: scale2 = scale1,
+        r: r2 = r1,
         nSamples = 1,
         phase=0,
-        r1 = this.r,
-        scale1 = 1,
         tStart = this.t,
         type = Array,
-      } = opts;
-      let {
-        frequency2 = frequency1,
-        scale2 = scale1,
-        r2 = r1,
+        tween = false,
       } = opts;
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
@@ -130,6 +131,7 @@
         let v = scale * Math.sin(2*Math.PI*frequency*(tStart+tSample)/sampleRate+phase);
         this.frequency = frequency;
         this.r = r;
+        this.scale = scale;
         samples[tSample] = this.step(v);
       }
       return samples;
