@@ -135,6 +135,9 @@ DESCRIPTION
         Train code with up to N attempts to save a better model.
         If omitted, model is used as is without training. (0)
 
+    -vb, --verbose
+        Verbose logging
+
     -wf, --wav-frames N
         Number of WAV frames to use as input (2)
 

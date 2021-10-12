@@ -7,7 +7,7 @@
     constructor(data, opts={}) {
       logger.logInstance(this);
       let {
-        sampleRate,
+        sampleRate=22050,
       } = opts;
       if (data == null) {
         throw this.error('E_SIGNAL_ARRAY', 'Audio data signal array is required');

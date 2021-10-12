@@ -92,7 +92,8 @@
         data = [data];
       }
       data = data.map(ds=>ds.filter((v,i) => i%xInterval === 0));
-      let { min, max, range, width } = this.stats(data);
+      let stats = this.stats(data);
+      let { min, max, range, width } = stats;
       assert(!isNaN(min), `expected min for data${data}`);
       assert(!isNaN(max), `expected max for data`);
       assert(!isNaN(width), `expected width for data`);
@@ -112,12 +113,9 @@
       }
       if (title) {
         console.log(title);
-        console.log(`chart:`, {
-          min: Number(min.toFixed(Math.max(5, precision))),
-          max: Number(max.toFixed(Math.max(5, precision))),
-          xInterval,
-        });
       }
+
+      return stats;
     }
 
   }
