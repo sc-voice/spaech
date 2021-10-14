@@ -5,6 +5,7 @@
   const path = require('path');
   const { WaveFile } = require('wavefile');
   let {
+    Chart,
     Signal,
   } = require('../index');
   this.timeout(10*1000);
@@ -34,6 +35,50 @@
     should(Signal.rmsErr(a,a)).equal(0);
     should(Signal.rmsErr(a,b)).equal(1.09544511501033210);
     should.deepEqual(sig.rmsErr(b), Signal.rmsErr(a,b));
+  });
+  it("sineWave()", ()=>{
+    let verbose = 0;
+    let chart = new Chart();
+    let frequency = 411;
+    let nSamples = 5;
+    let phase = Math.PI/2;
+    let sampleRate = 22050;
+    let scale = 10;
+    let s1 = Signal.sineWave({frequency, nSamples, phase, scale, sampleRate, });
+
+    // Default sampleRate is 22050 (a common MP3 rate)
+    let s2 = Signal.sineWave({frequency, nSamples, scale, phase});
+    let k = 2*Math.PI*frequency/sampleRate;
+    let sine = [...new Int8Array(nSamples)].map((v,i)=>scale*Math.sin(i*k));
+    let sinePhase = [...new Int8Array(nSamples)].map((v,i)=>scale*Math.sin(i*k+phase));
+    should.deepEqual(s1, sinePhase);
+    should.deepEqual(s1, s2); 
+
+    // default phase is zero
+    let s3 = Signal.sineWave({frequency, nSamples, scale}); 
+    should.deepEqual(s3, sine);
+
+    // default scale is 1
+    let s4 = Signal.sineWave({frequency, nSamples:100}); 
+    let title = `sineWave(${JSON.stringify({frequency})})`;
+    verbose && chart.plot({title, data:[s4]});
+    let stats4 = Signal.stats(s4);
+    should(Math.abs(stats4.min + 1)).below(0.05);
+
+    // sustain < 1 provides decay
+    let sustain = 0.99;
+    let s5 = Signal.sineWave({frequency, nSamples:100, sustain}); 
+    title = `sineWave(${JSON.stringify({frequency, sustain})})`;
+    verbose && chart.plot({title, data:[s5]});
+    let stats5 = Signal.stats(s5);
+    should(Math.abs(stats5.min + 0.66)).below(0.05);
+
+    // returns TypedArray
+    scale = 16384;
+    let type = Int16Array;
+    let s6 = Signal.sineWave({frequency, nSamples, scale, type});
+    should(s6 instanceof type);
+    should.deepEqual([...s6], sine.map(v=>Math.round(scale*v/10)));
   });
   it("stats() => stats", async()=>{
     let dataOdd = [1, 2, 3, 5, 4];

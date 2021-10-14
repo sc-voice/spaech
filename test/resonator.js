@@ -15,7 +15,7 @@
     0.2947551744109042,
   ];
 
-  it("TESTTESTdefault ctor", ()=>{
+  it("default ctor", ()=>{
     let resonator = new Resonator();
     should(resonator).properties({
       sampleRate: 22050,
@@ -26,17 +26,18 @@
       x2: 0,
       y1: 0,
       y2: 0,
+      scale: 1,
     });
   });
-  it("TESTTESTfilter()", ()=>{
+  it("filter()", ()=>{
     let frequency = 210;
     let tStart = 0;
     let phase = 0;
     let nSamples = 5;
     let scale = 1;
-    let y0 = Resonator.sineWave({frequency, scale, phase, nSamples, tStart} );
+    let y0 = Signal.sineWave({frequency, scale, phase, nSamples, tStart} );
     should.deepEqual(y0, SINE200.slice(0,5));
-    let y1 = Resonator.sineWave({frequency, scale, phase, nSamples, tStart:1} );
+    let y1 = Signal.sineWave({frequency, scale, phase, nSamples, tStart:1} );
     should.deepEqual(y1, SINE200.slice(1,6));
   });
   it("filter()", async()=>{
@@ -45,7 +46,7 @@
     let hr = new Resonator({r,frequency});
     let nSamples = 1000;
     let scale = 1;
-    let x = YinPitch.sineWave({frequency, scale, phase:0.25*2*Math.PI, nSamples, });
+    let x = Signal.sineWave({frequency, scale, phase:0.25*2*Math.PI, nSamples, });
     let y = [...hr.filter(x)];
     let chart = new Chart();
     let title = `resonator 1:input 2:output`;
@@ -55,27 +56,31 @@
     let { pitch } = yp.pitch(x);
     console.log({pitch});
   });
-  it("resonate() one or many", ()=>{
+  it("TESTTESTresonate() one or many", ()=>{
     let verbose = 0;
     let r1 = new Resonator();
     let r2 = new Resonator();
     let nSamples = 400;
 
-    // resonate can be single-stepped
+    // resonate can be single-stepped with some degree of precision
     let s1 = r1.resonate({nSamples});
     let s2 = [...new Int8Array(nSamples)].map(()=>r2.resonate()[0]);
-    should.deepEqual(r1, r2);
-    should.deepEqual(s1, s2);
+    let precision = 10;
+    should(r1.y1.toFixed(precision), r2.y1.toFixed(precision));
+    should(r1.y2.toFixed(precision), r2.y2.toFixed(precision));
+    should(r1.x1.toFixed(precision), r2.x1.toFixed(precision));
+    should(r1.x2.toFixed(precision), r2.x2.toFixed(precision));
+    should.deepEqual(s1.map(v=>v.toFixed(precision)), s2.map(v=>v.toFixed(precision)));
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
     let stats = Signal.stats(s1);
-    should(stats).properties({iMax:358, max:0.8320586576302439});
+    should(stats.iMax).equal(358);
+    should(stats.max.toFixed(precision)).equal((0.8320586576302439).toFixed(precision));
   });
-  it("TESTTESTresonate() changes frequency", ()=>{
+  it("resonate() changes frequency", ()=>{
     let verbose = 0;
     let r1 = new Resonator({r:0.99});
     let nSamples = 400;
-    // resonate can be single-stepped
     let xInterval = 4;
     let f1 = 220;
     let f2 = Number((1.2*f1).toFixed(1));
@@ -93,6 +98,36 @@
     let stats = Signal.stats(s1);
     //should(stats).properties({iMax:358, max:0.8320586576302439});
     should(r1).properties({ frequency:f2, scale:0, t:3*nSamples});
+  });
+  it("resonate() tweens", ()=>{
+    let verbose = 1;
+    let scale = 1;
+    // For pitch detection, the f2 and f1 must be close
+    let f1 = 220;
+    let f2 = Number((1.3*f1).toFixed(1));
+    let scale1 = 1;
+    let scale2 = 2;
+    let r = 0.999;
+    let r1 = new Resonator({r, frequency:f1});
+    let r2 = new Resonator({r, frequency:f1});
+    let nSamples = 2000;
+    let s1 = r1.resonate({nSamples, frequency:f2, tween:false, scale:scale1});
+    let s2 = r2.resonate({nSamples, frequency:f2, tween:true, scale:scale2});
+    let yp = new YinPitch();
+    let xInterval = 5;
+    let chart = new Chart();
+    let title = `resonate(${f1}...${f2}Hz) 1:no-tween 2:tween`;
+    verbose && chart.plot({title, data:[s1,s2], xInterval});
+    should(r1).properties({ frequency:f2, scale:scale1, t:1*nSamples});
+    should(r2).properties({ frequency:f2, scale:scale2, t:1*nSamples});
+
+    // Tweening changes the resonator throughout the interval,
+    // so the perceived pitch will be intermediate
+    let {pitch:pitch1} = yp.pitch(s1);
+    let {pitch:pitch2} = yp.pitch(s2);
+    console.log({pitch1, pitch2});
+    should(Math.round(pitch2)).above(f1).below(pitch1);
+    should(Math.round(pitch1)).equal(f2);
   });
 
 })

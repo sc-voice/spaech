@@ -42,30 +42,6 @@
       });
     }
 
-    static sineWave(args={}) {
-      let {
-        frequency, 
-        nSamples, 
-        phase=0, 
-        sampleRate=22050,
-        scale=1,
-        sustain=1,
-        type=Array,
-      } = args;
-
-      let samples = type === Array
-         ? [...new Int8Array(nSamples)]
-         : new type(nSamples);
-      let level = sustain;
-      for (let t = 0; t < nSamples; t++) {
-        let v = level * scale * Math.sin(2*Math.PI*frequency*t/sampleRate+phase);
-        samples[t] = v;
-        level *= sustain;
-      }
-
-      return samples;
-    }
-
     static interpolateParabolic(x,y) {
       let x10 = x[1] - x[0];
       let x12 = x[1] - x[2];
@@ -113,7 +89,8 @@
         `[E_NSAMPLES] samples expected:${minSamples} actual:${samples.length}`);
       let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
       let t = 0;
-      let result = { acf, pitch:0, pitchEst:0, tau:0, tauEst:0 };
+      let result = { pitch:0, pitchEst:0, tau:0, tauEst:0 };
+      Object.defineProperty(result, 'acf', {value:acf});
       let acft0 = this.autoCorrelate(samples, t, 0);
       if (acft0/window < minPower) {
         return result;

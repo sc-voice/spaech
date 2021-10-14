@@ -26,15 +26,11 @@
 
   this.timeout(10*1000);
 
-  function sineWave(frequency,nSamples, phase=0, sampleRate=22050) {
-    return YinPitch.sineWave({frequency, nSamples, phase, sampleRate});
-  }
-
   function zeros(n) {
     return [...new Int8Array(n)];
   }
 
-  it("TESTTESTdefault ctor()", ()=>{
+  it("default ctor()", ()=>{
     let verbose = 0;
     let window = WINDOW_25MS;
     let sampleRate = 22050; // default
@@ -48,10 +44,11 @@
 
     should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
   });
-  it("autoCorrelate()", ()=>{
+  it("TESTTESTautoCorrelate()", ()=>{
     let verbose = 0;
-    let n = 100;
-    let samples = sineWave(700, n);
+    let nSamples = 100;
+    let frequency = 700;
+    let samples = Signal.sineWave({frequency, nSamples});
     let ypa = [
       new YinPitch({window: 8}),
       new YinPitch({window: 9}),
@@ -60,7 +57,7 @@
       new YinPitch({window: 12}),
     ];
     let t = 0; // pitch at time t
-    let acva = ypa.map(yp=>zeros(n-yp.window)
+    let acva = ypa.map(yp=>zeros(nSamples-yp.window)
       .map((v,tau)=>yp.autoCorrelate(samples, t,tau)));
     let stats = acva.map(acv=>Signal.stats(acv));
     verbose && (new Chart({data:acva})).plot();
@@ -68,13 +65,13 @@
     // peaks depend on window size
     should.deepEqual(stats.map(s=>s.iMax), [ 34, 2, 33, 64, 32 ]);
   });
-  it("acfDifference()", ()=>{
+  it("TESTTESTacfDifference()", ()=>{
     let verbose = 0;
-    let n = 100;
+    let nSamples = 100;
     let Q = 40; // determines arbitrary frequency to be detected
-    let f = SAMPLE_RATE / Q;
+    let frequency = SAMPLE_RATE / Q;
     let phase = Math.PI/3; // arbitrary phase
-    let samples = sineWave(f, n, phase);
+    let samples = Signal.sineWave({frequency, nSamples, phase});
     let ypa = [
       new YinPitch({samples, window: 8}),
       new YinPitch({samples, window: 9}),
@@ -83,14 +80,14 @@
       new YinPitch({samples, window: 12}),
     ];
     let t = 0; // pitch at time t
-    let da = ypa.map(yp=>zeros(n-yp.window)
+    let da = ypa.map(yp=>zeros(nSamples-yp.window)
       .map((v,tau)=>yp.acfDifference(samples, t,tau)));
     let daz = da.map(d=>
       d.reduce(((a,v,i) => a==null || (d[i] < d[a]) ? (i || undefined) : a),undefined)
     );
 
     // The computed Q will be an integer multiple of the original Q
-    should.deepEqual(daz, [Q, 2*Q, 2*Q, 2*Q, Q]);
+    should.deepEqual(daz, [2*Q, Q, Q, Q, Q]);
     let title=`LEGEND: 1:samples, 2:ACFdifference/10`;
     verbose && (new Chart({title,data:[samples, da[2].map(v=>v/10)]})).plot();
   });
@@ -111,7 +108,7 @@
     let phase = Math.random()*2*Math.PI; 
     let nSamples = MIN_SAMPLES;
     let sustain = 0.999;
-    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain });
+    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let yp = new YinPitch();
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
     let title=`LEGEND: 1:samples, 2:ACFdifference`;
@@ -133,7 +130,7 @@
     let phase = Math.random()*2*Math.PI; 
     let nSamples = MIN_SAMPLES;
     let sustain = 0.999;
-    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain });
+    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let yp = new YinPitch();
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
     let xInterval = 10;
@@ -154,7 +151,7 @@
     let phase = Math.random()*2*Math.PI; 
     let nSamples = MIN_SAMPLES;
     let sustain = 0.999;
-    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain });
+    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let yp = new YinPitch();
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
     let xInterval = 4;
@@ -168,7 +165,7 @@
     should(pitch).above(frequency-e).below(frequency+e);
     should(pitch).above(frequency-e).below(frequency+e);
   });
-  it("TESTTESTpitch() sin FREQ_CHILD (scale, typedarray)", ()=>{
+  it("pitch() sin FREQ_CHILD (scale, typedarray)", ()=>{
     let verbose = 0;
     let frequency = FREQ_CHILD;
     let phase = Math.random()*2*Math.PI; 
@@ -176,7 +173,7 @@
     let sustain = 0.999;
     let type = Int16Array;
     let scale = 16384;
-    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain, scale, type });
+    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain, scale, type });
     let yp = new YinPitch({});
     let { pitch, pitchEst, acf, tau, tauEst, } = yp.pitch(samples);
     let title=`LEGEND: 1:samples, 2:ACFdifference`;
@@ -197,7 +194,7 @@
     let nSamples = MIN_SAMPLES;
     let sustain = 1;
     let scale = 16384;
-    let samples = YinPitch.sineWave({ frequency, nSamples, phase, sustain, scale, type:Int16Array });
+    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain, scale, type:Int16Array });
 
     let frameSize = 192;
     let nFrames = Math.floor((samples.length + frameSize-1)/frameSize);

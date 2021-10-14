@@ -19,6 +19,42 @@
       });
     }
 
+    static sineWave(args={}) {
+      let {
+        frequency, 
+        nSamples, 
+        phase=0, 
+        sampleRate=22050,
+        scale=1,
+        sustain=1,
+        tStart=0,
+        type=Array,
+      } = args;
+
+      assert(0<=tStart && Number.isInteger(tStart), `[E_TSTART] expected non-negative integer`);
+      let samples = type === Array
+         ? [...new Int8Array(nSamples)]
+         : new type(nSamples);
+      let level = scale * sustain;
+      let k = 2*Math.PI*frequency/sampleRate;
+      let tPhase = k*tStart+phase;
+      if (type === Int16Array || type === Int32Array || type === BigInt64Array) {
+        for (let t = 0; t < nSamples; t++) {
+          let v = level * Math.sin(k*t+tPhase);
+          samples[t] = Math.round(v); // TypedArrays use floor()
+          level *= sustain;
+        }
+      } else {
+        for (let t = 0; t < nSamples; t++) {
+          let v = level * Math.sin(k*t+tPhase);
+          samples[t] = v;
+          level *= sustain;
+        }
+      }
+
+      return samples;
+    }
+
     static fromWav(buf) {
       let wf = new WaveFile(buf);
       let data = wf.getSamples(false, Int16Array);

@@ -216,9 +216,12 @@ async function writeSignal(fpath, signal) {
     let { frequency, milliseconds } = resonance;
     let nSamples = Math.round(milliseconds * sampleRate / 1000);
     console.log(`nSamples`, {nSamples, milliseconds, sampleRate});
-    let frequency1 = frequency ? frequency : resonator.frequency;
-    let scale1 = frequency ? peakAmplitude : 0;
-    let signal = resonator.resonate({ frequency1, nSamples, scale1, });
+    let scale = peakAmplitude;
+    if (frequency === 0) {
+      scale = 0;
+      frequency = undefined;
+    }
+    let signal = resonator.resonate({ frequency, nSamples, scale, });
     data = data.concat(signal);
   });
 

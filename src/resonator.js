@@ -31,32 +31,6 @@
       });
     }
 
-    static sineWave(args={}) {
-      let {
-        frequency, 
-        nSamples, 
-        phase=0, 
-        sampleRate=22050,
-        scale=1,
-        sustain=1,
-        tStart=0,
-        type=Array,
-      } = args;
-
-      assert(0<=tStart && Number.isInteger(tStart), `[E_TSTART] expected non-negative integer`);
-      let samples = type === Array
-         ? [...new Int8Array(nSamples)]
-         : new type(nSamples);
-      let level = sustain;
-      for (let t = 0; t < nSamples; t++) {
-        let v = level * scale * Math.sin(2*Math.PI*frequency*(t+tStart)/sampleRate+phase);
-        samples[t] = v;
-        level *= sustain;
-      }
-
-      return samples;
-    }
-
     clear() {
       this.y1 = 0;
       this.y2 = 0;
@@ -71,35 +45,42 @@
       let a1 = -2 * r * Math.cos(2*Math.PI*frequency*samplePeriod);
       let r2 = r * r;
       let a2 = r2;
+      let feedback = a1*y1 + a2*y2;
+
       let b0 = (1 - r2)/2;
       let b1 = 0;
       let b2 = -b0;
-      let y0 = -a1*y1 - a2*y2 + b0*x0 + b1*x1 + b2*x2;
+      let feedforward = b0*x0 + b1*x1 + b2*x2;
+
+      let y0 = feedforward - feedback;
       this.x1 = x0;
       this.x2 = x1;
       this.y1 = y0;
       this.y2 = y1;
       this.t++;
+
       return y0;
     }
 
     resonate(opts={}) {
+      let { sampleRate, frequency:frequency1, r:r1, scale:scale1, } = this;
       let {
-        sampleRate,
-        frequency: frequency1,
-        scale: scale1,
-        r: r1,
-      } = this;
-      let {
-        frequency: frequency2 = frequency1,
-        scale: scale2 = scale1,
-        r: r2 = r1,
+        frequency:frequency2 = frequency1,
         nSamples = 1,
         phase=0,
+        r:r2 = r1,
+        scale:scale2 = scale1,
         tStart = this.t,
-        type = Array,
         tween = false,
+        type = Array,
+        verbose = false,
       } = opts;
+
+      if (!tween) {
+        this.frequency = frequency1 = frequency2;
+        this.r = r1 = r2;
+        this.scale = scale1 = scale2;
+      }
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
          : new type(nSamples);
@@ -128,10 +109,9 @@
         let r = r1 === r2 
           ? r1
           : ((tEnd - tSample)*r1 + tSample*r2)/tEnd;
-        let v = scale * Math.sin(2*Math.PI*frequency*(tStart+tSample)/sampleRate+phase);
-        this.frequency = frequency;
-        this.r = r;
-        this.scale = scale;
+        let t= (tStart + tSample)/sampleRate;
+        let v = scale2 * Math.sin(2*Math.PI*frequency2*t+phase);
+        Object.assign(this, {frequency, r, scale});
         samples[tSample] = this.step(v);
       }
       return samples;

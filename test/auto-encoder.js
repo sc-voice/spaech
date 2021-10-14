@@ -261,7 +261,7 @@
     console.log(`mse`, mse.dataSync());
     should.deepEqual(mse2.dataSync(), mse.dataSync());
   });
-  it("TESTTESTaggFrame()", async()=>{
+  it("aggFrame()", async()=>{
     let dataFrames = [[-10,-5,-1], [0,1,5], [0,5,10]];
     let signal = new Signal(dataFrames.flat());
     let frameSize = 3;
