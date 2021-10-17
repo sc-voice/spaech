@@ -44,7 +44,7 @@
 
     should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
   });
-  it("TESTTESTautoCorrelate()", ()=>{
+  it("autoCorrelate()", ()=>{
     let verbose = 0;
     let nSamples = 100;
     let frequency = 700;
@@ -65,7 +65,7 @@
     // peaks depend on window size
     should.deepEqual(stats.map(s=>s.iMax), [ 34, 2, 33, 64, 32 ]);
   });
-  it("TESTTESTacfDifference()", ()=>{
+  it("acfDifference()", ()=>{
     let verbose = 0;
     let nSamples = 100;
     let Q = 40; // determines arbitrary frequency to be detected
@@ -209,6 +209,90 @@
     let chart = new Chart();
     chart.plot({data:[encoded[0]]});
     chart.plot({data:[samples.slice(-96)], xInterval:1});
+  });
+  it("phaseAmplitude() sin 140Hz", ()=>{
+    let verbose = 0;
+    let sampleRate = 22050;
+    let samplePeriod = 1/sampleRate;
+    let frequency = 140; // not a factor of sampleRate
+    let period = 1/frequency;
+    let phase = Math.random()*2*Math.PI - Math.PI; 
+    let samplesPerCycle = sampleRate/frequency;
+    phase = 0.9*Math.PI/2;
+    let scale = 16384;
+    let nSamples = samplesPerCycle*1;
+    let samples = Signal.sineWave({ 
+      frequency, nSamples, phase, scale, sampleRate,
+    });
+    let yp = new YinPitch();
+    let pa = yp.phaseAmplitude({samples, frequency});
+    let { real, imaginary } = pa.phasor;
+    console.log(`DEBUG`, {
+      pa, samplesPerCycle, nSamples, sampleRate, samplePeriod, 
+      frequency, period, phase, scale, 
+      pi2: Math.PI/2});
+    let chart = new Chart();
+    verbose && chart.plot({data:samples});
+
+    // Accuracy is worst when frequency is not a factor of sampleRate
+    should(Math.abs(phase - pa.phase)).below(2e-3);
+    should(Math.abs(scale - pa.amplitude)/scale).below(3e-3);
+  });
+  it("TESTTESTharmonics() detects f0,f1,...", ()=>{
+    let verbose = 0;
+    let sampleRate = 22050;
+    let samplePeriod = 1/sampleRate;
+    let nSamples = 812;
+    let f0 = 140;
+    let scale0 = 16384;
+    let phase = -Math.random()*Math.PI;
+    let harmonics = [
+      { frequency: f0, phase: phase, scale: scale0 * 1, },
+      { frequency: 2*f0, phase: phase + 0.2*Math.PI, scale: scale0 * 0.5, },
+      { frequency: 3*f0, phase: phase + 0.1*Math.PI, scale: scale0 * 0.3, },
+      { frequency: 4*f0, phase: phase + 0.1*Math.PI, scale: scale0 * 0.7, },
+      { frequency: 5*f0, phase: 0, scale: scale0 * 0, },
+      { frequency: 6*f0, phase: 0, scale: scale0 * 0, },
+      { frequency: 7*f0, phase: 0, scale: scale0 * 0, },
+    ];
+    harmonics.forEach(harmonic=>{
+      let {frequency, scale, phase} = harmonic;
+      harmonic.samples = Signal.sineWave({
+        frequency, nSamples, phase, scale, sampleRate
+      });
+      harmonic.samplesPerCycle = sampleRate/frequency;
+    });
+    let samples = harmonics.reduce((a,harmonic)=>{
+      let { samples } = harmonic;
+      return a == null
+        ? samples
+        : samples.map((v,i) => v + a[i]);
+    }, null);
+
+    let yp = new YinPitch();
+    let chart = new Chart();
+    let data = [...harmonics.map(h=>h.samples), samples];
+    verbose && chart.plot({data, xInterval:2});
+
+    let nHarmonics = harmonics.length+3;
+    let minAmplitude = scale0 * 0.003;
+    let harmonicsOut = yp.harmonics(samples, {nHarmonics, minAmplitude});
+    should(harmonicsOut.length).equal(nHarmonics);
+    verbose && harmonicsOut.forEach(h=>console.log(`harmonic`, JSON.stringify(h)));
+    harmonics.forEach((harmonic,i)=>{
+      let { frequency, phase, scale } = harmonic;
+      let period = 1/frequency;
+      let hOut = harmonicsOut[i];
+      let dPhase = Math.abs(phase - hOut.phase);
+      let dAmplitude = Math.abs(scale - hOut.amplitude);
+      try {
+        should(dPhase).below(7e-3);
+        should(dAmplitude/scale0).below(2);
+      } catch(e) {
+        console.error(`ERROR`, hOut, e.message);
+        throw e;
+      }
+    });
   });
 
 })

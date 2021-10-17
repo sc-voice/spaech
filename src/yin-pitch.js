@@ -12,6 +12,8 @@
   const TAU_MIN_ADULT = Math.round(SAMPLE_RATE/FREQ_WOMAN); // 86
   const TAU_MAX = Math.round(SAMPLE_RATE/FREQ_MAN);         // 259
   const WINDOW_25MS = Math.round(SAMPLE_RATE * 0.025);      // 551
+  const POLLY_AMPLITUDE = 16384;  // AWS Polly MP3 maximum speech amplitude
+  const Chart = require('./chart');
 
   // http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf
 
@@ -22,6 +24,8 @@
         fMax = FREQ_CHILD,
         fMin = FREQ_MAN,
         minPower = 0,
+        minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
+        maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
         sampleRate = 22050,
         window = WINDOW_25MS,
       } = args;
@@ -124,6 +128,60 @@
       result.pitch = sampleRate/tau;
       result.pitchEst = sampleRate/tauEst;
       return result;
+    }
+
+    phaseAmplitude({samples, frequency}) {
+      let { sampleRate } = this;
+      assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
+        `[E_SAMPLES] expected signal samples`);
+      assert(!isNaN(frequency) && 0 < frequency, `[E_FREQUENCY] must be positive number`);
+      let samplesPerCycle = sampleRate/frequency;
+      let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
+      assert(0<nSamples, `[E_SAMPLES_LENGTH] minimum:${samplesPerCycle} actual:${samples.length}`);
+      let cosine = Signal.sineWave({frequency, nSamples, phase:Math.PI/2});
+      let sine = Signal.sineWave({frequency, nSamples});
+      let real = 0;
+      let imaginary = 0;
+      for (let t = 0; t < nSamples; t++) {
+        let st = samples[t];
+        real += st * cosine[t];
+        imaginary += st * sine[t];
+      }
+      let amplitude = 2*Math.sqrt(real*real + imaginary*imaginary)/nSamples;
+      let chart = new Chart();
+      0 && chart.plot({data:[samples, cosine, sine]});
+      let phase = Math.atan2(-imaginary, real) + Math.PI/2;
+      if (Math.PI <= phase) { phase -= 2*Math.PI; }
+      return { phase, amplitude, phasor:{real, imaginary}, nSamples, samplesPerCycle, }
+    }
+
+    harmonics(samples, opts={}) {
+      let { 
+        nHarmonics = 21,
+        sampleRate = this.sampleRate,
+        minAmplitude = this.minAmplitdude,
+        maxAmplitude = this.maxAmplitude,
+      } = opts;
+      let { pitch:f0 } = this.pitch(samples);
+      let samplesPerCycle = sampleRate/f0;
+      let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
+      let f0Samples = samples.slice(0, nSamples); // Discard partial cycles
+      let harmonics = [];
+      for (let i=1; i <= nHarmonics; i++) {
+        let frequency = i*f0;
+        let pa = this.phaseAmplitude({samples:f0Samples, frequency});
+        if (pa.amplitude < minAmplitude) {
+          harmonics.push({frequency, phase:0, amplitude:0});
+        } else {
+          harmonics.push({
+            frequency,
+            phase: pa.phase,
+            amplitude: pa.amplitude,
+          });
+        }
+      }
+
+      return harmonics;
     }
 
   }

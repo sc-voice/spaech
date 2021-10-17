@@ -56,7 +56,7 @@
     let { pitch } = yp.pitch(x);
     console.log({pitch});
   });
-  it("TESTTESTresonate() one or many", ()=>{
+  it("resonate() one or many", ()=>{
     let verbose = 0;
     let r1 = new Resonator();
     let r2 = new Resonator();

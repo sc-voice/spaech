@@ -13,7 +13,7 @@
         xTicks=10,
         xTicks2=50,
         title='Chart',
-        lineLength=100,
+        lineLength=95,
         xInterval=1,
       } = args;
 
@@ -72,7 +72,7 @@
               default: return v;
             }
           });
-        let label = yOfLine(iy).toFixed(precision);
+        let label = yOfLine(iy).toExponential(precision);
         while (label.length < labelSize) { label = ' '+label}
         console.log(label, line.join(''));
       });
