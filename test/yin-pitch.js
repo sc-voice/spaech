@@ -238,7 +238,7 @@
     should(Math.abs(phase - pa.phase)).below(2e-3);
     should(Math.abs(scale - pa.amplitude)/scale).below(3e-3);
   });
-  it("TESTTESTharmonics() detects f0,f1,...", ()=>{
+  it("harmonics() detects f0,f1,...", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;

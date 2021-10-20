@@ -6,6 +6,7 @@ module.exports = {
   LzwInt8: require('./src/lzw-int8'),
   Mdct: require('./src/mdct'),
   Resonator: require('./src/resonator'),
+  ResonatorBank: require('./src/resonator-bank'),
   Signal: require('./src/signal'),
   Snake: require('./src/snake'),
   WordWindow: require('./src/word-window'),

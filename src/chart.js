@@ -6,7 +6,7 @@
   class Chart {
     constructor(args={}) {
       let {
-        data=[],
+        dataset = args.data || [],
         lines=15,
         precision=2,
         yTicks=4,
@@ -17,10 +17,10 @@
         xInterval=1,
       } = args;
 
-      assert(data instanceof Array, `[E_CHART_DATA] expected array of numbers for data`);
+      assert(dataset instanceof Array, `[E_CHART_DATASET] expected array of numbers for dataset`);
 
       Object.assign(this, { 
-        data,
+        dataset,
         lines,
         precision,
         xTicks,
@@ -29,13 +29,13 @@
       });
     }
 
-    stats(data=[]) {
-      if (!Array.isArray(data[0]) && !ArrayBuffer.isView(data[0])) {
-        data = [data];
+    stats(dataset=[]) {
+      if (!Array.isArray(dataset[0]) && !ArrayBuffer.isView(dataset[0])) {
+        dataset = [dataset];
       }
-      let width = data.reduce((a,d)=> Math.max(a, d.length), 0);
-      let data0 = data[0][0];
-      let stats = data.reduce((ad,ds,i)=>{
+      let width = dataset.reduce((a,d)=> Math.max(a, d.length), 0);
+      let data0 = dataset[0][0];
+      let stats = dataset.reduce((ad,ds,i)=>{
         return ds.reduce((a,d,j) => {
           assert(!isNaN(d), `Expected number for ds[${j}]:${d}`);
           a.min = Math.min(d, a.min);
@@ -80,26 +80,27 @@
 
     plot(args={}) {
       let {
-        data=this.data,
-        lines=this.lines,
-        xTicks=this.xTicks,
-        xInterval=this.xInterval,
-        title=this.title,
-        transpose=false,
+        dataset = args.data || this.dataset,
+        lines = this.lines,
+        xTicks = this.xTicks,
+        xInterval = this.xInterval,
+        title = this.title,
+        lineLength = this.lineLength,
+        precision = this.precision,
+        transpose = false,
       } = args;
-      let {precision, lineLength} = this;
-      if (!Array.isArray(data[0]) && !ArrayBuffer.isView(data[0])) {
-        data = [data];
+      if (!Array.isArray(dataset[0]) && !ArrayBuffer.isView(dataset[0])) {
+        dataset = [dataset];
       }
-      data = data.map(ds=>ds.filter((v,i) => i%xInterval === 0));
-      let stats = this.stats(data);
+      dataset = dataset.map(ds=>ds.filter((v,i) => i%xInterval === 0));
+      let stats = this.stats(dataset);
       let { min, max, range, width } = stats;
-      assert(!isNaN(min), `expected min for data${data}`);
-      assert(!isNaN(max), `expected max for data`);
-      assert(!isNaN(width), `expected width for data`);
+      assert(!isNaN(min), `expected min for dataset${dataset}`);
+      assert(!isNaN(max), `expected max for dataset`);
+      assert(!isNaN(width), `expected width for dataset`);
       let output = [...new Array(lines)].map(e=>new Int8Array(width));
       let line = (x)=> Math.round(range ? (max - x)*(lines - 1)/range : lines/2);
-      data.forEach((ds,id)=>{
+      dataset.forEach((ds,id)=>{
         ds.forEach((d,ix)=>{
           let iy = line(d);
           let oiy = output[iy];

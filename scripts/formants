@@ -53,6 +53,9 @@ DESCRIPTION
     -fs, --frame-size
         Input is broken up into frames.
 
+    -ha, --harmonic-amplitude
+        Minimum harmonic amplitude to be recognized as a harmonic (1)
+
     -ll, --log-level
         Logging level: warn, error, [info], debug
 
@@ -113,6 +116,8 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.fMax = requiredNumber();
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = requiredNumber();
+  } else if (arg === '-ha' || arg === '--harmonic-amplitude') {
+    cmdCfg.minAmplitude = requiredNumber();
   } else if (arg === '-mp' || arg === '--min-power') {
     cmdCfg.minPower = requiredNumber();
   } else if (arg === '-si' || arg === '--signal-in') {
@@ -155,6 +160,7 @@ async function configuration(cfg=cmdCfg) {
     fMax: 300,
     frameSize: 192,
     logLevel: 'info',
+    minAmplitude: 1,
     minPower: 1,
     signalIn,
     verbose: false,
@@ -215,6 +221,7 @@ function inputsOfFrames(frames, inputSize) {
     fMin,
     fMax,
     frameSize,
+    minAmplitude,
     minPower,
     signalIn, 
     window,
@@ -225,24 +232,37 @@ function inputsOfFrames(frames, inputSize) {
 
   let sigIn = await wavSignal(signalIn);
   let { data:sigData, sampleRate } = sigIn;
-  let yp = new YinPitch({sampleRate, diffMax, fMin, fMax, window, minPower});
+  let yp = new YinPitch({
+    sampleRate, diffMax, fMin, fMax, window, minAmplitude, minPower,
+  });
   let nSamples = Math.ceil(yp.minSamples / frameSize) * frameSize;
   console.log(`DBG`, {nSamples, sigData:sigData.length});
 
   let power = [];
-  let f0 = [];
+  let h0 = [];
   for (let i = 0; i < sigData.length; i += frameSize) {
     let samples = sigData.subarray(i, i+nSamples);
     if (samples.length === nSamples) {
+      let harmonics = yp.harmonics(samples);
+      let {frequency:f0, amplitude:a0}  = harmonics[0];
       let { pitch } = yp.pitch(samples);
-      f0.push(pitch);
+      !f0 && console.log(`frame:${i} t:${(i/sampleRate).toFixed(3)}`);
+      f0 && console.log(`${f0.toFixed(1)}Hz`, harmonics
+        .sort((a,b)=>b.amplitude-a.amplitude)
+        .slice(0,10)
+        //.map(h=>`f${Math.round(h.frequency/f0)}:${h.amplitude.toFixed(0)}\u2220${h.phase.toFixed(2)}`)
+        .map(h=>h.frequency
+          ? `h${(f0&&h.frequency/f0).toFixed(0)}:${h.amplitude.toFixed(0)}`
+          : '0')
+        .join(', '));
+      h0.push(harmonics[0].frequency);
       //power.push(yp.autoCorrelate(samples, 0, 0)/nSamples);
     } else {
       logger.debug(`discarding partial samples[${i}]:${samples.length}`);
     }
   }
   let chart = new Chart({lines:chartLines});
-  chart.plot({ title:`1:f0, 2:power`, data:[f0], xInterval:4 });
+  chart.plot({ title:`1:h0, 2:power`, data:[h0], xInterval:4 });
 
   let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
 

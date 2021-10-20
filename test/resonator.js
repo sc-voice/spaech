@@ -56,6 +56,25 @@
     let { pitch } = yp.pitch(x);
     console.log({pitch});
   });
+  it("resonate() decays without input", ()=>{
+    let verbose = 0;
+    let r1 = new Resonator();
+    let nSamples = 400;
+
+    // resonate can be single-stepped with some degree of precision
+    let s1 = r1.resonate({nSamples});
+    let s2 = r1.resonate({nSamples, scale:0});
+    let chart = new Chart();
+    verbose && chart.plot({data:[s1,s2], xInterval:5});
+    let stats1b = Signal.stats(s1.slice(nSamples/2));
+    let stats2a = Signal.stats(s2.slice(0,nSamples/2));
+    let stats2b = Signal.stats(s2.slice(nSamples/2));
+    verbose && console.log({stats1b,stats2a,stats2b});
+
+    // resonate with no signal energy results in a decaying signal
+    should(stats2a.stdDev).above(stats1b.stdDev*0.7);   
+    should(stats2b.stdDev).below(stats2a.stdDev/2);
+  });
   it("resonate() one or many", ()=>{
     let verbose = 0;
     let r1 = new Resonator();

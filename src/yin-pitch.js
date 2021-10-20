@@ -38,6 +38,8 @@
         diffMax,
         fMax,
         fMin,
+        minAmplitude,
+        maxAmplitude,
         minPower,
         sampleRate,
         tauMax,
@@ -159,25 +161,22 @@
       let { 
         nHarmonics = 21,
         sampleRate = this.sampleRate,
-        minAmplitude = this.minAmplitdude,
+        minAmplitude = this.minAmplitude,
         maxAmplitude = this.maxAmplitude,
       } = opts;
       let { pitch:f0 } = this.pitch(samples);
-      let samplesPerCycle = sampleRate/f0;
-      let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
-      let f0Samples = samples.slice(0, nSamples); // Discard partial cycles
-      let harmonics = [];
-      for (let i=1; i <= nHarmonics; i++) {
-        let frequency = i*f0;
-        let pa = this.phaseAmplitude({samples:f0Samples, frequency});
-        if (pa.amplitude < minAmplitude) {
-          harmonics.push({frequency, phase:0, amplitude:0});
-        } else {
-          harmonics.push({
-            frequency,
-            phase: pa.phase,
-            amplitude: pa.amplitude,
-          });
+      let noHarmonic = { frequency:0, amplitude:0, phase:0 };
+      let harmonics = new Array(nHarmonics).fill(0).map(v=>noHarmonic);
+      if (f0) {
+        let samplesPerCycle = sampleRate/f0;
+        let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
+        let f0Samples = samples.slice(0, nSamples); // Discard partial cycles
+        for (let i=1; i <= nHarmonics; i++) {
+          let frequency = i*f0;
+          let pa = this.phaseAmplitude({samples:f0Samples, frequency});
+          if (minAmplitude < pa.amplitude) {
+            harmonics[i-1] = { frequency, phase:pa.phase, amplitude:pa.amplitude, };
+          }
         }
       }
 
