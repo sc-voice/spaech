@@ -119,7 +119,7 @@
     should(r1).properties({ frequency:f2, scale:0, t:3*nSamples});
   });
   it("resonate() tweens", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let scale = 1;
     // For pitch detection, the f2 and f1 must be close
     let f1 = 220;
@@ -129,9 +129,11 @@
     let r = 0.999;
     let r1 = new Resonator({r, frequency:f1});
     let r2 = new Resonator({r, frequency:f1});
+    let r3 = new Resonator({r, frequency:f1, tween:true});
     let nSamples = 2000;
     let s1 = r1.resonate({nSamples, frequency:f2, tween:false, scale:scale1});
     let s2 = r2.resonate({nSamples, frequency:f2, tween:true, scale:scale2});
+    let s3 = r3.resonate({nSamples, frequency:f2, scale:scale2}); // tween from instance
     let yp = new YinPitch();
     let xInterval = 5;
     let chart = new Chart();
@@ -139,12 +141,13 @@
     verbose && chart.plot({title, data:[s1,s2], xInterval});
     should(r1).properties({ frequency:f2, scale:scale1, t:1*nSamples});
     should(r2).properties({ frequency:f2, scale:scale2, t:1*nSamples});
+    should.deepEqual(s3, s2); // both are tweened
 
     // Tweening changes the resonator throughout the interval,
     // so the perceived pitch will be intermediate
     let {pitch:pitch1} = yp.pitch(s1);
     let {pitch:pitch2} = yp.pitch(s2);
-    console.log({pitch1, pitch2});
+    verbose && console.log({pitch1, pitch2});
     should(Math.round(pitch2)).above(f1).below(pitch1);
     should(Math.round(pitch1)).equal(f2);
   });

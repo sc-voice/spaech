@@ -1,4 +1,4 @@
-(typeof describe === 'function') && describe("resonator", function() {
+(typeof describe === 'function') && describe("resonator-bank", function() {
   const should = require("should");
   const assert = require("assert");
   let {
@@ -9,7 +9,7 @@
     YinPitch,
   } = require('../index');
 
-  it("TESTTESTdefault ctor()", ()=>{
+  it("default ctor()", ()=>{
     let rb = new ResonatorBank();
     let length = 10;
     let sampleRate = 22050;
@@ -27,8 +27,42 @@
       should(resonators[i]).properties({ sampleRate, r, scale, });
     }
   });
+  it("TESTTESTcustom ctor()", ()=>{
+    let length = 20;
+    let sampleRate = 44100;
+    let scale = 10000;
+    let frameSize = 96;
+    let frequency = 100;
+    let phase = 1;
+    let tween = true;
+    let rFirst = 0.98;
+    let rLast = 0.9;
+    let r = rFirst;
+    let rb = new ResonatorBank({
+      length, sampleRate, scale, frameSize, r, frequency, phase, tween,
+    });
+    should(rb).properties({ 
+      length, sampleRate, scale, frameSize, r, frequency, phase, tween,
+    });
+
+    let { resonators } = rb;
+    should(resonators.length).equal(length);
+    for (let i = 0; i < length; i++) {
+      should(resonators[i] instanceof Resonator);
+      should(resonators[i]).properties({ sampleRate, scale, r, tween});
+    }
+
+    // resonator bank r-factors can be tweened
+    let rbTween = new ResonatorBank({
+      length, sampleRate, scale, frameSize, r:[rFirst, rLast], frequency, phase, tween,
+    });
+    let { resonators: rTween } = rbTween;
+    should(rTween[0].r).equal(rFirst);
+    should(rTween.slice(-1)[0].r).equal(rLast);
+    should(rTween[1].r).below(rFirst).above(rLast);
+  });
   it("TESTTESTresonate()" , ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let length = 3;
     let frameSize = 90;
     let rb = new ResonatorBank({length, frameSize});
@@ -38,9 +72,9 @@
     let f0 = 800;
     let amplitude = 10000;
     let harmonics = [
-      { frequency: f0, amplitude: amplitude, phase: 0.1*Math.PI, },
-      { frequency: 2*f0, amplitude: 0.8*amplitude, phase: -0.2*Math.PI, },
-      { frequency: 3*f0, amplitude: 0.4*amplitude, phase: 0.3*Math.PI, },
+      { order: 1, frequency: f0, amplitude: amplitude, phase: 0.1*Math.PI, },
+      { order: 2, frequency: 2*f0, amplitude: 0.8*amplitude, phase: -0.2*Math.PI, },
+      { order: 3, frequency: 3*f0, amplitude: 0.4*amplitude, phase: 0.3*Math.PI, },
     ];
     let samples = [
       rb.resonate(harmonics),

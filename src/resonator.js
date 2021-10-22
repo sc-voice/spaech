@@ -15,10 +15,11 @@
         x2=this.x2,         // input at t-2
         scale = 1,          /// peak amplitude
         t=0,
+        tween = false,
       } = opts;
       assert(1 < sampleRate, `[E_SAMPLERATE_NAN] expected positive number`);
       assert(0 < frequency, `[E_FREQUENCY_NAN] expected positive number`);
-      assert(0 <= r <= 1, `[E_R] expected r between [0,1]`);
+      assert(Array.isArray(r) || !isNaN(r) && 0 <= r <= 1, `[E_R] expected r:${r} between [0,1]`);
       assert(!isNaN(x1), `[E_X1_NAN] expected number:${x1}`);
       assert(!isNaN(x2), `[E_X2_NAN] expected number:${x2}`);
       assert(!isNaN(y1), `[E_Y1_NAN] expected number:${y1}`);
@@ -27,7 +28,7 @@
       let samplePeriod = 1/sampleRate;
 
       Object.assign(this, { 
-        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, 
+        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, tween,
       });
     }
 
@@ -71,7 +72,7 @@
         r:r2 = r1,
         scale:scale2 = scale1,
         tStart = this.t,
-        tween = false,
+        tween = this.tween,
         type = Array,
         verbose = false,
       } = opts;

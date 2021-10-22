@@ -166,7 +166,7 @@
       } = opts;
       let { pitch:f0 } = this.pitch(samples);
       let noHarmonic = { frequency:0, amplitude:0, phase:0 };
-      let harmonics = new Array(nHarmonics).fill(0).map(v=>noHarmonic);
+      let harmonics = [];
       if (f0) {
         let samplesPerCycle = sampleRate/f0;
         let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
@@ -175,7 +175,7 @@
           let frequency = i*f0;
           let pa = this.phaseAmplitude({samples:f0Samples, frequency});
           if (minAmplitude < pa.amplitude) {
-            harmonics[i-1] = { frequency, phase:pa.phase, amplitude:pa.amplitude, };
+            harmonics.push({ frequency, phase:pa.phase, amplitude:pa.amplitude, order:i});
           }
         }
       }

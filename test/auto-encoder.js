@@ -261,7 +261,7 @@
     console.log(`mse`, mse.dataSync());
     should.deepEqual(mse2.dataSync(), mse.dataSync());
   });
-  it("aggFrame()", async()=>{
+  it("aggFrame()", async()=>{ // DEPRECATED
     let dataFrames = [[-10,-5,-1], [0,1,5], [0,5,10]];
     let signal = new Signal(dataFrames.flat());
     let frameSize = 3;
@@ -285,7 +285,7 @@
       dataFrames.map(frame=>[aScale*frame.reduce(((a,v,i)=>v*Math.cos(2*Math.PI*i/frameSize)+a), 0)])
     );
   });
-  it("aggFrame() cosr", async()=>{
+  it("aggFrame() cosr", async()=>{ // DEPRECATED
     let dataFrames = [[-10,-5,-1], [0,1,5], [0,5,10]];
     let signal = new Signal(dataFrames.flat());
     let frameSize = 3;
@@ -305,9 +305,9 @@
     );
     let aScale = 1/7.5000000000000036; //1/-7.5;
     let aggSum = frames.reduce(((a,f)=>a+=f[frameSize]), 0);
-    should(Math.abs(aggSum)).above(1.5).below(3);
+    should(Math.abs(aggSum)).above(1.2).below(3);
   });
-  it("aggFrame() AN9.20_4.3", async()=>{
+  it("aggFrame() AN9.20_4.3", async()=>{ // DEPRECATED
     let verbose = 0;
     let signal = await wavSignal(AN9_20_4_3_WAV); // longer samples will improve training
     let frameSize = 103;

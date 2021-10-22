@@ -73,8 +73,10 @@
 
     /*
      * A frame aggregate vector factory
+     * NOTE: Aggregate vectors are generally useless since
+     * the equation of the aggregate is opaque to the neural net optimizer
      */
-    static aggFrame(frameSize, scale=1, aggregate='cos') {
+    static aggFrame(frameSize, scale=1, aggregate='cos') { // DEPRECATED
       let fAgg = aggregate.split(':')[0];
       let random;
       if (fAgg === 'cos') {
