@@ -8,6 +8,7 @@
       let {
         sampleRate = 22050, // Common sample rate for speech MP3
         frequency = 200,    // Median adult woman speech frequency
+        phase = 0,          // phase at t=0
         r=0.995,            // pole radius [0,1]
         y1=this.y1,         // output at t-1
         y2=this.y2,         // output at t-2
@@ -20,6 +21,7 @@
       assert(1 < sampleRate, `[E_SAMPLERATE_NAN] expected positive number`);
       assert(0 < frequency, `[E_FREQUENCY_NAN] expected positive number`);
       assert(Array.isArray(r) || !isNaN(r) && 0 <= r <= 1, `[E_R] expected r:${r} between [0,1]`);
+      assert(!isNaN(phase), `[E_PHASE_NAN] expected number:${phase}`);
       assert(!isNaN(x1), `[E_X1_NAN] expected number:${x1}`);
       assert(!isNaN(x2), `[E_X2_NAN] expected number:${x2}`);
       assert(!isNaN(y1), `[E_Y1_NAN] expected number:${y1}`);
@@ -28,7 +30,7 @@
       let samplePeriod = 1/sampleRate;
 
       Object.assign(this, { 
-        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, tween,
+        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, tween, phase,
       });
     }
 
@@ -64,11 +66,11 @@
     }
 
     resonate(opts={}) {
-      let { sampleRate, frequency:frequency1, r:r1, scale:scale1, } = this;
+      let { sampleRate, frequency:frequency1, r:r1, scale:scale1, phase:phase1} = this;
       let {
         frequency:frequency2 = frequency1,
         nSamples = 1,
-        phase=0,
+        phase:phase2 = phase1,
         r:r2 = r1,
         scale:scale2 = scale1,
         tStart = this.t,
@@ -81,6 +83,7 @@
         this.frequency = frequency1 = frequency2;
         this.r = r1 = r2;
         this.scale = scale1 = scale2;
+        this.phase = phase1 = phase2;
       }
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
@@ -90,11 +93,11 @@
           `[E_FREQUENCY2_SINGLE] frequency2 expected:${frequency1} actual:${frequency2}`);
         assert(r2 === r1, `[E_R2_SINGLE] r2 expected:${r1} actual:${r2}`);
         assert(scale2 === scale1, `[E_SCALE2_SINGLE] scale2 expected:${scale1} actual:${scale2}`);
-        assert(!isNaN(phase), `[E_PHASE_NAN] expected number:${phase}`);
+        assert(!isNaN(phase1), `[E_PHASE_NAN] expected number:${phase1}`);
         this.r = r1;
         assert(!isNaN(scale1), `[E_SCALE1_NAN] actual:${scale1}`);
         assert(!isNaN(frequency1), `[E_SCALE1_NAN] actual:${frequency1}`);
-        let x0 = scale1 * Math.sin(2*Math.PI*frequency1*tStart/sampleRate+phase);
+        let x0 = scale1 * Math.sin(2*Math.PI*frequency1*tStart/sampleRate+phase1);
         samples[0] = this.step(x0);
         return samples;
       }
@@ -107,6 +110,9 @@
         let scale = scale1 === scale2
           ? scale1
           : ((tEnd - tSample)*scale1 + tSample*scale2)/tEnd;
+        let phase = phase1 === phase2 
+          ? phase1
+          : ((tEnd - tSample)*phase1 + tSample*phase2)/tEnd;
         let r = r1 === r2 
           ? r1
           : ((tEnd - tSample)*r1 + tSample*r2)/tEnd;

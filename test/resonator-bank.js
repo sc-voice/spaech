@@ -27,7 +27,7 @@
       should(resonators[i]).properties({ sampleRate, r, scale, });
     }
   });
-  it("TESTTESTcustom ctor()", ()=>{
+  it("custom ctor()", ()=>{
     let length = 20;
     let sampleRate = 44100;
     let scale = 10000;
@@ -61,7 +61,7 @@
     should(rTween.slice(-1)[0].r).equal(rLast);
     should(rTween[1].r).below(rFirst).above(rLast);
   });
-  it("TESTTESTresonate()" , ()=>{
+  it("resonate()" , ()=>{
     let verbose = 0;
     let length = 3;
     let frameSize = 90;

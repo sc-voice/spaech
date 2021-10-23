@@ -68,6 +68,9 @@ DESCRIPTION
     -rc, --resonator-count COUNT
         Count of resonators in harmonic helmholz resonator bank (20)
 
+    -ro, --residual-out WAV_FILE
+        Residual non-harmonic output file
+
     -rr, --resonator-r R1,RN
         Feedback coefficient tweening interval for resonator bank (0.995,0.98)
 
@@ -77,7 +80,7 @@ DESCRIPTION
     -sk, --skew NSAMPLES
         Advance output by given number of samples (10)
 
-    -tr, --tween-resonator
+    -tw, --tween
         Interpolate resonator changes (false)
 
     -wi, --window
@@ -143,11 +146,13 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.logLevel = logger.logLevel = requiredArg();
   } else if (arg === '-rc' || arg === '--resonator-count') {
     cmdCfg.resonatorCount = requiredNumber();
+  } else if (arg === '-ro' || arg === '--residual-out') {
+    cmdCfg.residualOut = requiredArg();
   } else if (arg === '-rr' || arg === '--resonator-r') {
     cmdCfg.resonatorR = requiredArg().split(',').map(v=>Number(v));
   } else if (arg === '-sk' || arg === '--skew') {
     cmdCfg.skew = requiredNumber();
-  } else if (arg === '-tr' || arg === '--tweenResonator') {
+  } else if (arg === '-tw' || arg === '--tween') {
     cmdCfg.tweenResonator = true;
   } else if (arg === '-wi' || arg === '--window') {
     cmdCfg.window = requiredNumber();
@@ -242,6 +247,7 @@ function inputsOfFrames(frames, inputSize) {
     harmonicOut,
     minAmplitude,
     minPower,
+    residualOut,
     resonatorCount,
     resonatorR,
     signalIn, 
@@ -257,11 +263,12 @@ function inputsOfFrames(frames, inputSize) {
     frameSize,
     tween: tweenResonator,
   });
-  let dataOut = [];
+  let dataHarmonic = [];
   logger.info(script, argv.slice(2).join(' '));
   verbose && logger.info(`command options parsed as`, cfg);
 
   let sigIn = await wavSignal(signalIn);
+  let dataIn = sigIn.data;
   let { data:sigData, sampleRate } = sigIn;
   let yp = new YinPitch({
     sampleRate, diffMax, fMin, fMax, window, minAmplitude, minPower,
@@ -275,7 +282,7 @@ function inputsOfFrames(frames, inputSize) {
     let samples = sigData.subarray(i, i+nSamples);
     if (samples.length === nSamples) {
       let harmonics = yp.harmonics(samples);
-      dataOut = dataOut.concat(resBank.resonate(harmonics));
+      dataHarmonic = dataHarmonic.concat(resBank.resonate(harmonics));
       if (harmonics.length) {
         let {frequency:f0, amplitude:a0} = harmonics[0];
         let { pitch } = yp.pitch(samples);
@@ -295,21 +302,29 @@ function inputsOfFrames(frames, inputSize) {
   verbose && chart.plot({ title:`1:h0, 2:power`, data:[h0], xInterval:4 });
 
   let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
-
   if (harmonicOut) {
-    let dataIn = sigIn.data;
-    if (skew) {
-      let tail = resBank.resonate([], {nSamples:skew + dataIn.length - dataOut.length});
-      dataOut = [...dataOut.slice(skew), ...tail];
-    }
-    await writeSignal(harmonicOut, new Signal(dataOut));
-    let mse = Signal.rmsErr(dataIn, dataOut);
+    let tail = resBank.resonate([], {nSamples:skew + dataIn.length - dataHarmonic.length});
+    dataHarmonic = [...dataHarmonic.slice(skew), ...tail];
+    let sigHarmonic = new Signal(dataHarmonic);
+    await writeSignal(harmonicOut, sigHarmonic);
+    let mse = Signal.rmsErr(dataIn, dataHarmonic);
     logger.info(`harmonicOut => ${harmonicOut}`,
       `dataIn:${dataIn.length}`,
-      `dataOut:${dataOut.length}`,
+      `dataHarmonic:${dataHarmonic.length}`,
       `mse:${mse}`);
     await playSound(harmonicOut);
-    chart.plot({data:[dataIn, dataOut], xInterval:4});
+    verbose && chart.plot({data:[dataIn, dataHarmonic], xInterval:4});
+  }
+
+  if (residualOut) {
+    assert(harmonicOut, `[E_RESIDUAL_HARMONIC] no harmonic output for residual`);
+    let dataResidual = [];
+    for (let i = 0; i < dataHarmonic.length; i++) {
+      let v = dataIn[i] - dataHarmonic[i];
+      dataResidual.push(v);
+    }
+    await writeSignal(residualOut, new Signal(dataResidual));
+    await playSound(residualOut);
   }
 
   process.exit(0);
