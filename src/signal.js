@@ -31,7 +31,8 @@
         type=Array,
       } = args;
 
-      assert(0<=tStart && Number.isInteger(tStart), `[E_TSTART] expected non-negative integer`);
+      assert(0<=tStart && Number.isInteger(tStart), 
+        `[E_TSTART] expected non-negative integer:${tStart}`);
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
          : new type(nSamples);

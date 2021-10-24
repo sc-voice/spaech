@@ -54,7 +54,7 @@
 
     let yp = new YinPitch();
     let { pitch } = yp.pitch(x);
-    console.log({pitch});
+    //console.log({pitch});
   });
   it("resonate() decays without input", ()=>{
     let verbose = 0;
@@ -75,36 +75,27 @@
     should(stats2a.stdDev).above(stats1b.stdDev*0.7);   
     should(stats2b.stdDev).below(stats2a.stdDev/2);
   });
-  it("TESTTESTresonate() oscillate", ()=>{
-    return; // TODO
-    let verbose = 1;
-    let frequency = 201;
-    let phase = Math.random()*2*Math.PI;
-    let scale = 1000;
-    let nSamples = 40;
+  it("TESTTESToscillate()", ()=>{
+    let verbose = 0;
+    let frequency = 30*Math.random() + 150;
+    let phase = 2*Math.PI*Math.random();
+    let scale = 1000 * Math.random();
+    let nSamples = 400;
     let sine = Signal.sineWave({frequency, phase, scale, nSamples});
-    let oscillate = true;
-    let r1 = new Resonator({oscillate, frequency, phase, scale});
-    let r2 = new Resonator({oscillate}, frequency, phase, scale);
+    let r1 = new Resonator({frequency, phase, scale});
+    let r2 = new Resonator({frequency, phase, scale});
 
-    // resonate can be single-stepped with some degree of precision
-    let s1 = r1.resonate({nSamples});
+    // oscillate can be single-stepped with some degree of precision
+    let s1 = r1.oscillate({nSamples});
     should.deepEqual(s1, sine);
-    let s2 = [...new Int8Array(nSamples)].map(()=>r2.resonate()[0]);
+    let s2 = [...new Int8Array(nSamples)].map(()=>r2.oscillate()[0]);
     let precision = 10;
-    should(r1.y1.toFixed(precision), r2.y1.toFixed(precision));
-    should(r1.y2.toFixed(precision), r2.y2.toFixed(precision));
-    should(r1.x1.toFixed(precision), r2.x1.toFixed(precision));
-    should(r1.x2.toFixed(precision), r2.x2.toFixed(precision));
     should.deepEqual(s1.map(v=>v.toFixed(precision)), s2.map(v=>v.toFixed(precision)));
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
-    let stats = Signal.stats(s1);
-    should(stats.iMax).equal(358);
-    should(stats.max.toFixed(precision)).equal((0.8320586576302439).toFixed(precision));
   });
-  it("TESTTESTresonate() one or many", ()=>{
-    let verbose = 1;
+  it("resonate() one or many", ()=>{
+    let verbose = 0;
     let r1 = new Resonator();
     let r2 = new Resonator();
     console.log(`r1`, r1);

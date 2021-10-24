@@ -72,21 +72,22 @@
     let f0 = 800;
     let amplitude = 10000;
     let harmonics = [
-      { order: 1, frequency: f0, amplitude: amplitude, phase: 0.1*Math.PI, },
-      { order: 2, frequency: 2*f0, amplitude: 0.8*amplitude, phase: -0.2*Math.PI, },
-      { order: 3, frequency: 3*f0, amplitude: 0.4*amplitude, phase: 0.3*Math.PI, },
+      { order: 0, frequency: f0, amplitude: amplitude, phase: 0.1*Math.PI, },
+      { order: 1, frequency: 2*f0, amplitude: 0.8*amplitude, phase: -0.2*Math.PI, },
+      { order: 2, frequency: 3*f0, amplitude: 0.4*amplitude, phase: 0.3*Math.PI, },
     ];
-    let samples = [
+    let samplesRaw = [
       rb.resonate(harmonics),
       rb.resonate(harmonics),
       rb.resonate([]),  // no input energy
     ];
+    let samples = samplesRaw.flat();
     let chart = new Chart();
-    verbose && chart.plot({dataset:samples.flat(), lineLength: frameSize});
-    let stats0 = Signal.stats(samples[0]);
-    let stats1 = Signal.stats(samples[1]);
-    let stats2a = Signal.stats(samples[2].slice(0, frameSize/2));
-    let stats2b = Signal.stats(samples[2].slice(frameSize/2));
+    verbose && chart.plot({dataset:samples, lineLength: frameSize});
+    let stats0 = Signal.stats(samplesRaw[0]);
+    let stats1 = Signal.stats(samplesRaw[1]);
+    let stats2a = Signal.stats(samplesRaw[2].slice(0, frameSize/2));
+    let stats2b = Signal.stats(samplesRaw[2].slice(frameSize/2));
     should(stats0).properties({ count: frameSize, });
     should(stats1).properties({ count: frameSize, });
 
@@ -96,6 +97,41 @@
     // signal decays without input
     should(stats2a.stdDev).above(1).below(stats1.stdDev);
     should(stats2b.stdDev).above(1).below(stats2a.stdDev);
+  });
+  it("TESTTESToscillate()" , ()=>{
+    let verbose = 0;
+    let length = 3;
+    let frameSize = 90;
+    let rb = new ResonatorBank({length, frameSize});
+    should(rb).properties({
+      length, frameSize,
+    });
+    let f0 = 800;
+    let amplitude = 10000;
+    let harmonics = [
+      { order: 1, frequency: 2*f0, amplitude: amplitude, phase: -0.2*Math.PI, },
+      { order: 0, frequency: f0, amplitude: 0.8*amplitude, phase: 0.1*Math.PI, },
+      { order: 2, frequency: 3*f0, amplitude: 0.4*amplitude, phase: 0.3*Math.PI, },
+    ];
+    let samplesRaw = [
+      rb.oscillate(harmonics),
+      rb.oscillate(harmonics),
+      rb.oscillate([]),  // no input energy
+    ];
+    let samples = samplesRaw.flat();
+    let samplesExpected = harmonics.reduce((a,h)=>{
+      let { frequency, amplitude, phase } = h;
+      let nSamples = 2*frameSize;
+      let sine = Signal.sineWave({frequency, scale:amplitude, phase, nSamples});
+      for (let i=0; i < nSamples; i++) {
+        a[i] += sine[i];
+      }
+      return a;
+    }, new Array(samplesRaw.length*frameSize).fill(0));
+    should.deepEqual(samples, samplesExpected);
+
+    let chart = new Chart({title:`oscillate samples 1:actual 2:expected`});
+    verbose && chart.plot({dataset:[samples, samplesExpected], lineLength:frameSize});
   });
 
 })

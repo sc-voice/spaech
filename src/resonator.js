@@ -1,6 +1,7 @@
 (function(exports) {
   const { logger } = require('log-instance');
   const assert = require('assert');
+  const Signal = require('./signal');
 
   class Resonator { // second order Helmholz resonator
     constructor(opts={}) {
@@ -65,6 +66,66 @@
       return y0;
     }
 
+    oscillate(opts={}) {
+      let { sampleRate, frequency:frequency1, scale:scale1, phase:phase1} = this;
+      let {
+        frequency:frequency2 = frequency1,
+        nSamples = 1,
+        phase:phase2 = phase1,
+        scale:scale2 = scale1,
+        tStart = this.t,
+        tween = this.tween,
+        type = Array,
+        verbose = false,
+      } = opts;
+
+      if (!tween) {
+        this.frequency = frequency1 = frequency2;
+        this.scale = scale1 = scale2;
+        this.phase = phase1 = phase2;
+      }
+      let samples = type === Array
+         ? [...new Int8Array(nSamples)]
+         : new type(nSamples);
+      if (nSamples === 1) {
+        assert(frequency2 === frequency1, 
+          `[E_FREQUENCY2_SINGLE] frequency2 expected:${frequency1} actual:${frequency2}`);
+        assert(scale2 === scale1, `[E_SCALE2_SINGLE] scale2 expected:${scale1} actual:${scale2}`);
+        assert(!isNaN(phase1), `[E_PHASE_NAN] expected number:${phase1}`);
+        assert(!isNaN(scale1), `[E_SCALE1_NAN] actual:${scale1}`);
+        assert(!isNaN(frequency1), `[E_SCALE1_NAN] actual:${frequency1}`);
+        this.t++;
+        let v = Signal.sineWave({ 
+          frequency: frequency1, 
+          tStart,
+          phase: phase1, 
+          scale: scale1, 
+          nSamples: 1, 
+        })[0];
+        samples[0] = v;
+        return samples;
+      }
+      assert(0 < nSamples, `[E_NSAMPLES] expected at least 1 nSamples:${nSamples}`);
+      let tEnd = nSamples-1;
+      for (let tSample = 0; tSample <= tEnd; tSample++) {
+        let frequency = frequency1 === frequency2
+          ? frequency1
+          : ((tEnd - tSample)*frequency1 + tSample*frequency2)/tEnd;
+        let scale = scale1 === scale2
+          ? scale1
+          : ((tEnd - tSample)*scale1 + tSample*scale2)/tEnd;
+        let phase = phase1 === phase2 
+          ? phase1
+          : ((tEnd - tSample)*phase1 + tSample*phase2)/tEnd;
+        Object.assign(this, {frequency, phase, scale});
+        let t = (tStart + tSample)/sampleRate;
+        let v = Signal.sineWave({ frequency, tStart:tStart+tSample, phase, scale, nSamples: 1, })[0];
+        samples[tSample] = v;
+        this.t++;
+      }
+      return samples;
+    }
+
     resonate(opts={}) {
       let { sampleRate, frequency:frequency1, r:r1, scale:scale1, phase:phase1} = this;
       let {
@@ -118,7 +179,7 @@
           : ((tEnd - tSample)*r1 + tSample*r2)/tEnd;
         let t= (tStart + tSample)/sampleRate;
         let v = scale2 * Math.sin(2*Math.PI*frequency2*t+phase);
-        Object.assign(this, {frequency, r, scale});
+        Object.assign(this, {frequency, r, phase, scale});
         samples[tSample] = this.step(v);
       }
       return samples;

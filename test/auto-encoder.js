@@ -305,7 +305,7 @@
     );
     let aScale = 1/7.5000000000000036; //1/-7.5;
     let aggSum = frames.reduce(((a,f)=>a+=f[frameSize]), 0);
-    should(Math.abs(aggSum)).above(1.2).below(3);
+    should(Math.abs(aggSum)).above(1.1).below(3);
   });
   it("aggFrame() AN9.20_4.3", async()=>{ // DEPRECATED
     let verbose = 0;

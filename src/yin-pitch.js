@@ -171,8 +171,8 @@
         let samplesPerCycle = sampleRate/f0;
         let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
         let f0Samples = samples.slice(0, nSamples); // Discard partial cycles
-        for (let i=1; i <= nHarmonics; i++) {
-          let frequency = i*f0;
+        for (let i=0; i < nHarmonics; i++) {
+          let frequency = (i+1)*f0;
           let pa = this.phaseAmplitude({samples:f0Samples, frequency});
           if (minAmplitude < pa.amplitude) {
             harmonics.push({ frequency, phase:pa.phase, amplitude:pa.amplitude, order:i});

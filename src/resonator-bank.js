@@ -65,6 +65,36 @@
       return samples;
     }
 
+    oscillate(harmonics=[], opts={}) {
+      let { resonators, length, frameSize } = this;
+      let { length:hLen } = harmonics;
+      let {
+        nSamples = frameSize,
+        type = Array,
+        verbose = false,
+      } = opts;
+      let samples = new type(nSamples).fill(0);
+      let harmonicMap = harmonics.reduce((a,harmonic,i)=>{
+        let { order } = harmonic;
+        assert(order != null, `[E_HARMONIC_ORDER] required: order`);
+        a[order] = harmonic;
+        return a;
+      }, {});
+      resonators.forEach((resonator, i) => {
+        let harmonic = harmonicMap[i] || {};
+        let { order, frequency, amplitude:scale=0, phase } = harmonic;
+        verbose && console.log(`resonator${i}`, 
+          JSON.stringify({frequency, scale, phase, order}), 
+          resonator.frequency);
+        let hs = resonator.oscillate({ frequency, nSamples, scale, phase, type, verbose, });
+        for (let j = 0; j < hs.length; j++) {
+          samples[j] += hs[j];
+        }
+      });
+
+      return samples;
+    }
+
   }
 
   module.exports = exports.ResonatorBank = ResonatorBank;
