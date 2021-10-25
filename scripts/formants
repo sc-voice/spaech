@@ -68,6 +68,9 @@ DESCRIPTION
     -rc, --resonator-count COUNT
         Count of resonators in harmonic helmholz resonator bank (20)
 
+    -os, --oscillate
+        Invoke oscillate() method of resonator bank instead of resonate() method.
+
     -ro, --residual-out WAV_FILE
         Residual non-harmonic output file
 
@@ -78,10 +81,16 @@ DESCRIPTION
         Input signal 
 
     -sk, --skew NSAMPLES
-        Advance output by given number of samples (10)
+        Advance output by given number of samples (0)
 
     -tw, --tween
         Interpolate resonator changes (false)
+
+    -vb, --verbose
+        Verbose output
+
+    -vf, --verbose-frames F1 FN
+        Provide verbose information for frames [F1,FN] 
 
     -wi, --window
         Auto-correlation window size (551)
@@ -109,17 +118,17 @@ if (nargs < 3) {
 }
 for (var i = 2; i < nargs; i++) {
   var arg = argv[i];
-  let requiredArg = ()=>{
+  let requiredArg = (key=arg)=>{
     let nextArg = argv[++i];
     if (nextArg == null) {
-      die(logger.error('E_REQUIRED', `Expected additional information for: ${arg}`));
+      die(logger.error('E_REQUIRED', `Expected additional information for: ${key}`));
     }
     return nextArg;
   }
-  let requiredNumber = ()=>{
+  let requiredNumber = (key=arg)=>{
     let n = Number(requiredArg());
     if (isNaN(n)) {
-      die(logger.error(`[E_NUMBER] "${argv[i-1]}" option requires a number:${argv[i]}`));
+      die(logger.error(`[E_NUMBER] "${key}" option requires a number:${argv[i]}`));
     }
     return n;
   }
@@ -130,8 +139,8 @@ for (var i = 2; i < nargs; i++) {
   } else if (arg === '-ad' || arg === '--acf-diff') {
     cmdCfg.diffMax = requiredNumber();
   } else if (arg === '-fb' || arg === '--frequency-band') {
-    cmdCfg.fMin = requiredNumber();
-    cmdCfg.fMax = requiredNumber();
+    cmdCfg.fMin = requiredNumber(arg);
+    cmdCfg.fMax = requiredNumber(arg);
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = requiredNumber();
   } else if (arg === '-ha' || arg === '--harmonic-amplitude') {
@@ -144,6 +153,8 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.signalIn = requiredArg();
   } else if (arg === '-ll' || arg === '--log-level') {
     cmdCfg.logLevel = logger.logLevel = requiredArg();
+  } else if (arg === '-os' || arg === '--oscillate') {
+    cmdCfg.oscillate = true;
   } else if (arg === '-rc' || arg === '--resonator-count') {
     cmdCfg.resonatorCount = requiredNumber();
   } else if (arg === '-ro' || arg === '--residual-out') {
@@ -154,6 +165,11 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.skew = requiredNumber();
   } else if (arg === '-tw' || arg === '--tween') {
     cmdCfg.tweenResonator = true;
+  } else if (arg === '-vb' || arg === '--verbose') {
+    cmdCfg.verbose = true;
+  } else if (arg === '-vf' || arg === '--verbose-frames') {
+    cmdCfg.verboseFrame1 = requiredNumber(arg);
+    cmdCfg.verboseFrameN = requiredNumber(arg);
   } else if (arg === '-wi' || arg === '--window') {
     cmdCfg.window = requiredNumber();
   } else {
@@ -194,9 +210,10 @@ async function configuration(cfg=cmdCfg) {
     logLevel: 'info',
     minAmplitude: 1,
     minPower: 1,
+    oscillate: false,
     resonatorCount: 20,
     resonatorR: 0.98,
-    skew: 10,
+    skew: 0,
     signalIn,
     tweenResonator: false,
     verbose: false,
@@ -247,6 +264,7 @@ function inputsOfFrames(frames, inputSize) {
     harmonicOut,
     minAmplitude,
     minPower,
+    oscillate,
     residualOut,
     resonatorCount,
     resonatorR,
@@ -254,6 +272,8 @@ function inputsOfFrames(frames, inputSize) {
     skew,
     tweenResonator,
     verbose,
+    verboseFrame1,
+    verboseFrameN,
     window,
 
   } = cfg;
@@ -268,42 +288,45 @@ function inputsOfFrames(frames, inputSize) {
   verbose && logger.info(`command options parsed as`, cfg);
 
   let sigIn = await wavSignal(signalIn);
-  let dataIn = sigIn.data;
-  let { data:sigData, sampleRate } = sigIn;
+  let { data:dataIn, sampleRate } = sigIn;
   let yp = new YinPitch({
     sampleRate, diffMax, fMin, fMax, window, minAmplitude, minPower,
   });
   let nSamples = Math.ceil(yp.minSamples / frameSize) * frameSize;
-  logger.info({nSamples, sigData:sigData.length});
+  logger.info({nSamples, dataIn:dataIn.length});
+  let chart = new Chart({lines:chartLines});
+  let resBankFun = oscillate 
+    ? (a1,a2)=>resBank.oscillate(a1,a2) 
+    : (a1,a2)=>resBank.resonate(a1,a2);
 
-  let power = [];
-  let h0 = [];
-  for (let i = 0; i < sigData.length; i += frameSize) {
-    let samples = sigData.subarray(i, i+nSamples);
+  for (let i = 0; i < dataIn.length; i += frameSize) {
+    let iFrame = i/frameSize;
+    let verboseFrame = verboseFrame1 <= iFrame && iFrame <= verboseFrameN;
+    let samples = dataIn.subarray(i, i+nSamples);
     if (samples.length === nSamples) {
       let harmonics = yp.harmonics(samples);
-      dataHarmonic = dataHarmonic.concat(resBank.resonate(harmonics));
+      dataHarmonic = dataHarmonic.concat(resBankFun(harmonics));
+      let verbosePrefix = `frame:${i/frameSize} [${i}] t:${(i/sampleRate).toFixed(3)}`;
       if (harmonics.length) {
         let {frequency:f0, amplitude:a0} = harmonics[0];
         let { pitch } = yp.pitch(samples);
-        verbose && logger.info(`${f0.toFixed(1)}Hz`, harmonics
-          .sort((a,b)=>b.amplitude-a.amplitude)
-          .map(h=>`h${h.order}:${h.amplitude.toFixed(0)}`)
-          .join(', '));
-        h0.push(harmonics[0].frequency);
+        verboseFrame && console.log(verbosePrefix, 
+          `${f0.toFixed(1)}Hz`, 
+          harmonics
+            .sort((a,b)=>b.amplitude-a.amplitude)
+            .map(h=>`h${h.order}:${h.amplitude.toFixed(0)}`)
+            .join(', '));
       } else {
-        verbose && logger.info(`frame:${i} t:${(i/sampleRate).toFixed(3)}`);
+        verboseFrame && console.log(verbosePrefix);
       }
     } else {
       logger.debug(`discarding partial samples[${i}]:${samples.length}`);
     }
   }
-  let chart = new Chart({lines:chartLines});
-  verbose && chart.plot({ title:`1:h0, 2:power`, data:[h0], xInterval:4 });
 
   let elapsed = ((Date.now()-msStart)/60000).toFixed(1);
   if (harmonicOut) {
-    let tail = resBank.resonate([], {nSamples:skew + dataIn.length - dataHarmonic.length});
+    let tail = resBankFun([], {nSamples:skew + dataIn.length - dataHarmonic.length});
     dataHarmonic = [...dataHarmonic.slice(skew), ...tail];
     let sigHarmonic = new Signal(dataHarmonic);
     await writeSignal(harmonicOut, sigHarmonic);
@@ -313,7 +336,18 @@ function inputsOfFrames(frames, inputSize) {
       `dataHarmonic:${dataHarmonic.length}`,
       `mse:${mse}`);
     await playSound(harmonicOut);
-    verbose && chart.plot({data:[dataIn, dataHarmonic], xInterval:4});
+    if (verboseFrame1 != null) {
+      let f1 = verboseFrame1 * frameSize;
+      let fEnd = (verboseFrameN + 1) * frameSize;
+      chart.plot({
+        title:`frames:[${verboseFrame1},${verboseFrameN}] 1:dataIn 2:dataHarmonic`,
+        data:[
+          dataIn.slice(f1,fEnd), 
+          dataHarmonic.slice(f1,fEnd),
+        ],
+        lineLength: frameSize,
+      });
+    }
   }
 
   if (residualOut) {
