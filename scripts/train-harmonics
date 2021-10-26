@@ -1,0 +1,50 @@
+#!/bin/bash
+
+if [ "$1" ]; then FRAMESIZE=$1; shift; else FRAMESIZE=96;   fi
+if [ "$1" ]; then WAVFRAMES=$1; shift; else WAVFRAMES=1;    fi
+if [ "$1" ]; then LAYERS=$1;    shift; else LAYERS=1;       fi
+if [ "$1" ]; then CODESIZE=$1;  shift; else CODESIZE=$(( (FRAMESIZE*(1+WAVFRAMES))/2 )); fi
+if [ "$1" ]; then NOISE=$1;     shift; else NOISE=128;      fi
+if [ "$1" ]; then EPOCHS=$1;    shift; else EPOCHS=200;     fi
+if [ "$1" ]; then EPOCH1=$1;    shift; else EPOCH1=0;       fi
+if [ "$1" ]; then UNITS=$1;     shift; else UNITS=9;        fi
+
+MODELCFG=w${WAVFRAMES}l${LAYERS}c${CODESIZE}f${FRAMESIZE}e${EPOCHS}n${NOISE}
+echo "LAYERS=$LAYERS UNITS=$UNITS CODESIZE=$CODESIZE" \
+  "MODELCFG=$MODELCFG NOISE=$NOISE EPOCHS=$EPOCHS FRAMESIZE=$FRAMESIZE"
+TRAIN=an9.20_4.3
+HARMONIC=o20f96
+MODELDIR=local/harmonics/${MODELCFG}
+MODEL=${MODELDIR}/$TRAIN
+SIGTRN=local/harmonics/${TRAIN}_${HARMONIC}.wav
+SIGTRNEXP=test/data/${TRAIN}.wav
+VALAUDIO=evam-me-suttam
+SIGVAL=local/harmonics/evam-${HARMONIC}.wav
+SIGVALEXP=test/data/$VALAUDIO.wav
+ATTEMPTS=3
+BATCHSIZE=256
+
+mkdir -p $MODEL
+
+echo $MODEL "$0"
+scripts/wav-coder \
+  -bs $BATCHSIZE \
+  -cs $CODESIZE \
+  -el $LAYERS \
+  -ep $EPOCHS \
+  -eu 0.$UNITS \
+  -fs $FRAMESIZE \
+  -ie $EPOCH1 \
+  -mp $MODEL \
+  -nk $NOISE \
+  -se $SIGTRNEXP \
+  -si $SIGTRN \
+  -so $MODELDIR/$VALAUDIO.wav \
+  -sv $SIGVAL \
+  -sve $SIGVALEXP \
+  -tr $ATTEMPTS \
+  -wf $WAVFRAMES \
+  2>&1 | tee -a $MODELDIR/train.log 
+RC=${PIPESTATUS[0]}
+echo LAYERS=$LAYERS UNITS=$UNITS CODESIZE=$CODESIZE MODELCFG=$MODELCFG NOISE=$NOISE EPOCHS=$EPOCHS
+echo "TRAINED $MODEL => $RC"

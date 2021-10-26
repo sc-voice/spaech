@@ -7,6 +7,8 @@
   const FREQ_CHILD = 300;
   const FREQ_WOMAN = 255;     // adult woman speech 165-255Hz
   const FREQ_MAN = 85;        // adult male speech 85-155Hz
+  const FMAX = 1.1*FREQ_CHILD;
+  const FMIN = 0.9*FREQ_MAN;
   const SAMPLE_RATE = 22050;  // 2 * 3**2 * 5**2 * 7**2
   const TAU_MIN = Math.round(SAMPLE_RATE/FREQ_CHILD);       // 74
   const TAU_MIN_ADULT = Math.round(SAMPLE_RATE/FREQ_WOMAN); // 86
@@ -21,8 +23,8 @@
     constructor(args={}) {
       let {
         diffMax = 0.1,
-        fMax = FREQ_CHILD,
-        fMin = FREQ_MAN,
+        fMax = FMAX,
+        fMin = FMIN,
         minPower = 0,
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
@@ -90,7 +92,7 @@
     pitch(samples) {
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
-      let { minPower, minSamples, window, tauMin, tauMax, sampleRate, diffMax } = this;
+      let { minPower, minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax } = this;
       assert(minSamples <= samples.length, 
         `[E_NSAMPLES] samples expected:${minSamples} actual:${samples.length}`);
       let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
@@ -125,10 +127,15 @@
       assert(!isNaN(y[0]), `[E_NAN_ACF] x:${tauEst-1} tauMin:${tauMin} tauMax:${tauMax}`);
       assert(!isNaN(y[2]), `[E_NAN_ACF] x:${tauEst+1} tauMin:${tauMin} tauMax:${tauMax}`);
       let tau = YinPitch.interpolateParabolic(x,y);
-      result.tau = tau;
-      result.tauEst = tauEst;
-      result.pitch = sampleRate/tau;
-      result.pitchEst = sampleRate/tauEst;
+      if (tau > 0) {
+        let pitch = sampleRate / tau;
+        if (fMin <= pitch && pitch <= fMax) {
+          result.tau = tau;
+          result.tauEst = tauEst;
+          result.pitch = pitch;
+          result.pitchEst = sampleRate/tauEst;
+        }
+      }
       return result;
     }
 
@@ -136,7 +143,7 @@
       let { sampleRate } = this;
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
-      assert(!isNaN(frequency) && 0 < frequency, `[E_FREQUENCY] must be positive number`);
+      assert(!isNaN(frequency) && 0 < frequency, `[E_FREQUENCY] must be positive number:${frequency}`);
       let samplesPerCycle = sampleRate/frequency;
       let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
       assert(0<nSamples, `[E_SAMPLES_LENGTH] minimum:${samplesPerCycle} actual:${samples.length}`);

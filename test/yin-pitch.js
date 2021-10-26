@@ -17,12 +17,14 @@
   const FREQ_WOMAN = 255;     // adult woman speech 165-255Hz
   const FREQ_MAN = 85;        // adult male speech 85-155Hz
   const FREQ_ADULT = (FREQ_MAN+FREQ_WOMAN)/2;
+  const FMAX = 1.1*FREQ_CHILD;
+  const FMIN = 0.9*FREQ_MAN;
   const SAMPLE_RATE = 22050;  // 2 * 3**2 * 5**2 * 7**2
-  const TAU_MIN = Math.round(SAMPLE_RATE/FREQ_CHILD)-1;     // 72
+  const TAU_MIN = Math.round(SAMPLE_RATE/FMAX)-1;     // 72
   const TAU_MIN_ADULT = Math.round(SAMPLE_RATE/FREQ_WOMAN); // 86
-  const TAU_MAX = Math.round(SAMPLE_RATE/FREQ_MAN)+1;       // 260
+  const TAU_MAX = Math.round(SAMPLE_RATE/FMIN)+1;       // 260
   const WINDOW_25MS = Math.round(SAMPLE_RATE * 0.025);      // 551
-  const MIN_SAMPLES = TAU_MAX+WINDOW_25MS+50;               // 316 
+  const MIN_SAMPLES = TAU_MAX+WINDOW_25MS+50;               // 841 
 
   this.timeout(10*1000);
 
@@ -30,12 +32,12 @@
     return [...new Int8Array(n)];
   }
 
-  it("default ctor()", ()=>{
+  it("TESTTESTdefault ctor()", ()=>{
     let verbose = 0;
     let window = WINDOW_25MS;
     let sampleRate = 22050; // default
-    let fMin = FREQ_MAN;
-    let fMax = FREQ_CHILD;
+    let fMin = FMIN;
+    let fMax = FMAX;
     let tauMin = TAU_MIN;
     let tauMax = TAU_MAX;
     let minSamples = window + tauMax + 1;
@@ -102,7 +104,7 @@
     let xInterp = YinPitch.interpolateParabolic(x,y);
     should(xInterp).equal(xMin);
   });
-  it("pitch() sin FREQ_MAN", ()=>{
+  it("TESTTESTpitch() sin FREQ_MAN", ()=>{
     let verbose = 0;
     let frequency = FREQ_MAN;
     let phase = Math.random()*2*Math.PI; 
@@ -122,6 +124,7 @@
       tauMin: yp.tauMin,
       tauMax: yp.tauMax,
     });
+    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.33); // error rate goes down as sustain approaches 1
   });
   it("pitch() sin FREQ_ADULT", ()=>{
@@ -143,6 +146,7 @@
       tauMin: yp.tauMin,
       tauMax: yp.tauMax,
     });
+    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.21); // error rate decreases with frequency
   });
   it("pitch() sin FREQ_WOMAN", ()=>{
@@ -154,6 +158,7 @@
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let yp = new YinPitch();
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
+    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     let xInterval = 4;
     verbose && (new Chart({title:'samples',data:[samples],xInterval})).plot();
     verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval})).plot();
@@ -176,6 +181,7 @@
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain, scale, type });
     let yp = new YinPitch({});
     let { pitch, pitchEst, acf, tau, tauEst, } = yp.pitch(samples);
+    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     let title=`LEGEND: 1:samples, 2:ACFdifference`;
     let error = Math.abs(pitch-frequency);
     let xInterval = 10;
@@ -238,11 +244,11 @@
     should(Math.abs(phase - pa.phase)).below(2e-3);
     should(Math.abs(scale - pa.amplitude)/scale).below(3e-3);
   });
-  it("harmonics() detects f0,f1,...", ()=>{
+  it("TESTTESTharmonics() detects f0,f1,...", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
-    let nSamples = 812;
+    let nSamples = MIN_SAMPLES;
     let f0 = 140;
     let scale0 = 16384;
     let phase = -Math.random()*Math.PI;
@@ -293,6 +299,29 @@
         throw e;
       }
     });
+  });
+  it('pitch() negative frequency', async()=>{
+    let verbose = 0;
+    let ferr = path.join(__dirname, 'data/yin-pitch-err1.json');
+    let error = JSON.parse(await fs.promises.readFile(ferr));
+    let { samples } = error;
+    let yp = new YinPitch();
+    let chart = new Chart({lines: 7});
+    verbose && chart.plot({data:samples});
+    let resPitch = yp.pitch(samples);
+    verbose && console.log(resPitch);
+    should(resPitch.pitch).not.below(0);
+  });
+  it('pitch() no samples', async()=>{
+    let verbose = 0;
+    let ferr = path.join(__dirname, 'data/yin-pitch-err2.json');
+    let error = JSON.parse(await fs.promises.readFile(ferr));
+    let { samples } = error;
+    let yp = new YinPitch();
+    let chart = new Chart({lines: 7});
+    verbose && chart.plot({data:samples});
+    let ypRes = yp.harmonics(samples);
+    should.deepEqual(ypRes, []); // no signal
   });
 
 })

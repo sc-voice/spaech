@@ -301,12 +301,21 @@ function inputsOfFrames(frames, inputSize) {
 
   for (let i = 0; i < dataIn.length; i += frameSize) {
     let iFrame = i/frameSize;
+    let verbosePrefix = `frame:${i/frameSize} [${i}] t:${(i/sampleRate).toFixed(3)}`;
     let verboseFrame = verboseFrame1 <= iFrame && iFrame <= verboseFrameN;
     let samples = dataIn.subarray(i, i+nSamples);
     if (samples.length === nSamples) {
-      let harmonics = yp.harmonics(samples);
-      dataHarmonic = dataHarmonic.concat(resBankFun(harmonics));
-      let verbosePrefix = `frame:${i/frameSize} [${i}] t:${(i/sampleRate).toFixed(3)}`;
+      let harmonics;
+      try {
+        harmonics = yp.harmonics(samples);
+        dataHarmonic = dataHarmonic.concat(resBankFun(harmonics));
+      } catch (e) {
+        let ferr = path.join(__dirname, '../local/error.json');
+        await fs.promises.writeFile(ferr, JSON.stringify({
+          e: e.message, samples:[...samples], iFrame, frameSize, i, }));
+        logger.warn(`${verbosePrefix} Caught exception ${e.message}`);
+        throw e;
+      }
       if (harmonics.length) {
         let {frequency:f0, amplitude:a0} = harmonics[0];
         let { pitch } = yp.pitch(samples);
