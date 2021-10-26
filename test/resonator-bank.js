@@ -98,7 +98,7 @@
     should(stats2a.stdDev).above(1).below(stats1.stdDev);
     should(stats2b.stdDev).above(1).below(stats2a.stdDev);
   });
-  it("TESTTESToscillate()" , ()=>{
+  it("oscillate()" , ()=>{
     let verbose = 0;
     let length = 3;
     let frameSize = 90;

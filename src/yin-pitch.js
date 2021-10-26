@@ -25,6 +25,7 @@
         diffMax = 0.1,
         fMax = FMAX,
         fMin = FMIN,
+        rFun = YinPitch.yinE1,
         minPower = 0,
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
@@ -43,11 +44,44 @@
         minAmplitude,
         maxAmplitude,
         minPower,
+        rFun,
         sampleRate,
         tauMax,
         tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
         window,
       });
+    }
+
+    // Equation (1) with window left-aligned to time (i.e., t=0)
+    static yinE1(samples, t, tau, w) {  
+      assert(0<=t && t+w+tau<samples.length, 
+        `[E_E1_BOUNDS] yinE1 bounds violation [${t}, ${t+w+tau}] `+
+        `samples:${samples.length}`);
+
+      let sum = 0;
+      for (let i = t+1; i <= t+w; i++) {
+        sum += samples[i] * samples[i+tau];
+      }
+      return sum;
+    }
+
+    // Equation (A1) with window centered on time (i.e., t≈window/2)
+    static yinEA1(samples, t, tau, w) {
+      let sum = 0;
+      let nSamples = samples.length;
+      let iStart = Math.round(t - tau/2 - w/2);
+      let iEnd = Math.round(t - tau/2 + w/2);
+      assert(0<=iStart && iStart<nSamples,
+        `[E_EA1_START] yinEA1 bounds violation:\n`+
+        JSON.stringify({iStart, iEnd, t, tau, nSamples}));
+      assert(0<=iEnd && iEnd<nSamples, 
+        `[E_EA1_END] yinEA1 bounds violation:\n`+
+        JSON.stringify({iStart, iEnd, t, tau, nSamples}));
+
+      for (let i = iStart; i <= iEnd; i++) {
+        sum += samples[i] * samples[i+tau];
+      }
+      return sum;
     }
 
     static interpolateParabolic(x,y) {
@@ -70,16 +104,7 @@
     }
 
     autoCorrelate(samples, t, tau) {
-      let { window} = this;
-      assert(0<=t && t+window+tau<samples.length, 
-        `[E_ACF_BOUNDS] autocorrelation bounds violation [${t}, ${t+window+tau}] `+
-        `samples:${samples.length}`);
-
-      let sum = 0;
-      for (let i = t+1; i <= t+window; i++) {
-        sum += samples[i] * samples[i+tau];
-      }
-      return sum;
+      return YinPitch.yinE1(samples, t, tau, this.window);
     }
 
     acfDifference(samples, t, tau) {
@@ -89,25 +114,31 @@
       return acft0 + acftau0 - 2*acfttau;
     }
 
-    pitch(samples) {
+    pitch(samples, rFun=YinPitch.yinE1, tSample=0) {
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
       let { minPower, minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax } = this;
-      assert(minSamples <= samples.length, 
-        `[E_NSAMPLES] samples expected:${minSamples} actual:${samples.length}`);
+      let nSamples = samples.length;
+      assert(minSamples<=nSamples, `[E_NSAMPLES] expected:${minSamples} actual:${nSamples}`);
       let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
-      let t = 0;
-      let result = { pitch:0, pitchEst:0, tau:0, tauEst:0 };
+      let t = tSample;
+      let result = { pitch:0, pitchEst:0, tau:0, tauEst:0, tSample, };
       Object.defineProperty(result, 'acf', {value:acf});
-      let acft0 = this.autoCorrelate(samples, t, 0);
-      if (acft0/window < minPower) {
+
+
+      let rt0 = rFun(samples, t, 0, window);
+      if (rt0/window < minPower) {
         return result;
       }
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
-        let acftau0 = this.autoCorrelate(samples, t+tau, 0); 
-        let acfttau = this.autoCorrelate(samples, t, tau);
-        let v = acft0 + acftau0 - 2*acfttau;
+        // let v = acfDifference(samples, t, tau); 
+        // INLINE OPTIMIZATION (START)
+        let rtau0 = rFun(samples, t+tau, 0, window); 
+        let rttau = rFun(samples, t, tau, window);
+        let v = rt0 + rtau0 - 2*rttau;
+        // INLINE OPTIMIZATION (END)
+
         assert(!isNaN(v), `[E_NAN_ACFDIFF] t:${t} tau:${tau}`);
         acf.push(v);
         if (tau >= tauMax) {

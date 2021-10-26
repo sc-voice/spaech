@@ -75,7 +75,7 @@
     should(stats2a.stdDev).above(stats1b.stdDev*0.7);   
     should(stats2b.stdDev).below(stats2a.stdDev/2);
   });
-  it("TESTTESToscillate()", ()=>{
+  it("oscillate()", ()=>{
     let verbose = 0;
     let frequency = 30*Math.random() + 150;
     let phase = 2*Math.PI*Math.random();

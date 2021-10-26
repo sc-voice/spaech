@@ -29,10 +29,10 @@
   this.timeout(10*1000);
 
   function zeros(n) {
-    return [...new Int8Array(n)];
+    return new Array(n).fill(0);
   }
 
-  it("TESTTESTdefault ctor()", ()=>{
+  it("default ctor()", ()=>{
     let verbose = 0;
     let window = WINDOW_25MS;
     let sampleRate = 22050; // default
@@ -45,6 +45,52 @@
     let yp = new YinPitch();
 
     should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
+  });
+  it("TESTTESTyinE1()", ()=>{
+    let verbose = 1;
+    let nSamples = 100;
+    let frequency = 700;
+    let samples = Signal.sineWave({frequency, nSamples});
+    let ypa = [
+      new YinPitch({window: 8}),
+      new YinPitch({window: 9}),
+      new YinPitch({window: 10}),
+      new YinPitch({window: 11}),
+      new YinPitch({window: 12}),
+    ];
+    let t = 0; // pitch at time t
+    let acva = ypa.map(yp=>{
+      let w = yp.window;
+      return zeros(nSamples-w).map((v,tau)=>YinPitch.yinE1(samples, t,tau, w))
+    });
+    let stats = acva.map(acv=>Signal.stats(acv));
+    verbose && (new Chart({title:`yinE1 t:${t}`, data:acva})).plot();
+
+    // peaks depend on window size
+    should.deepEqual(stats.map(s=>s.iMax), [ 34, 2, 33, 64, 32 ]);
+  });
+  it("TESTTESTyinEA1()", ()=>{
+    let verbose = 1;
+    let nSamples = 100;
+    let frequency = 700;
+    let samples = Signal.sineWave({frequency, nSamples});
+    let ypa = [
+      new YinPitch({window: 8}),
+      new YinPitch({window: 9}),
+      new YinPitch({window: 10}),
+      new YinPitch({window: 11}),
+      new YinPitch({window: 12}),
+    ];
+    let t = Math.floor((nSamples-1)/2); // pitch at time t
+    let acva = ypa.map(yp=>{
+      let w = yp.window;
+      return zeros(nSamples-w).map((v,tau)=>YinPitch.yinEA1(samples, t,tau, w))
+    });
+    let stats = acva.map(acv=>Signal.stats(acv));
+    verbose && (new Chart({title:`yinEA1 t:${t}`, data:acva})).plot();
+
+    // peaks depend on window size
+    should.deepEqual(stats.map(s=>s.iMax), [ 63, 0, 63, 0, 63 ]);
   });
   it("autoCorrelate()", ()=>{
     let verbose = 0;
@@ -112,7 +158,8 @@
     let sustain = 0.999;
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let yp = new YinPitch();
-    let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
+    let { pitch, pitchEst, tau, tauEst, acf, tSample, equation } = yp.pitch(samples);
+    should(tSample).equal(0);
     let title=`LEGEND: 1:samples, 2:ACFdifference`;
     let xInterval = 4;
     verbose && (new Chart({title:'samples',data:[samples],xInterval})).plot();
@@ -244,7 +291,7 @@
     should(Math.abs(phase - pa.phase)).below(2e-3);
     should(Math.abs(scale - pa.amplitude)/scale).below(3e-3);
   });
-  it("TESTTESTharmonics() detects f0,f1,...", ()=>{
+  it("harmonics() detects f0,f1,...", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
