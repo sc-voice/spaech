@@ -52,7 +52,8 @@
     let title = `resonator 1:input 2:output`;
     chart.plot({title, data:[x,y], xInterval:4});
 
-    let yp = new YinPitch();
+    let rFun = YinPitch.yinE1;
+    let yp = new YinPitch({rFun});
     let { pitch } = yp.pitch(x);
     //console.log({pitch});
   });
@@ -154,7 +155,8 @@
     let s1 = r1.resonate({nSamples, frequency:f2, tween:false, scale:scale1});
     let s2 = r2.resonate({nSamples, frequency:f2, tween:true, scale:scale2});
     let s3 = r3.resonate({nSamples, frequency:f2, scale:scale2}); // tween from instance
-    let yp = new YinPitch();
+    let rFun = YinPitch.yinE1;
+    let yp = new YinPitch({rFun});
     let xInterval = 5;
     let chart = new Chart();
     let title = `resonate(${f1}...${f2}Hz) 1:no-tween 2:tween`;
