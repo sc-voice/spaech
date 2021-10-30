@@ -46,7 +46,7 @@ DESCRIPTION
         Maximum ACF difference threshold (0.1);
 
     -fb, --frequency-band FMIN FMAX
-        Minimum and maximium speech frequenciesy recognized (85 300).
+        Minimum and maximium speech frequencies recognized (85 300).
         Male speech is in the 85-150Hz band.  Female speech is in the 160-255Hz band.
         Child speech is at 300 Hz.
 

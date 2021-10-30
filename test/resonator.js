@@ -29,34 +29,6 @@
       scale: 1,
     });
   });
-  it("filter()", ()=>{
-    let frequency = 210;
-    let tStart = 0;
-    let phase = 0;
-    let nSamples = 5;
-    let scale = 1;
-    let y0 = Signal.sineWave({frequency, scale, phase, nSamples, tStart} );
-    should.deepEqual(y0, SINE200.slice(0,5));
-    let y1 = Signal.sineWave({frequency, scale, phase, nSamples, tStart:1} );
-    should.deepEqual(y1, SINE200.slice(1,6));
-  });
-  it("filter()", async()=>{
-    let r = 0.995;
-    let frequency = 210;
-    let hr = new Resonator({r,frequency});
-    let nSamples = 1000;
-    let scale = 1;
-    let x = Signal.sineWave({frequency, scale, phase:0.25*2*Math.PI, nSamples, });
-    let y = [...hr.filter(x)];
-    let chart = new Chart();
-    let title = `resonator 1:input 2:output`;
-    chart.plot({title, data:[x,y], xInterval:4});
-
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
-    let { pitch } = yp.pitch(x);
-    //console.log({pitch});
-  });
   it("resonate() decays without input", ()=>{
     let verbose = 0;
     let r1 = new Resonator();
@@ -95,11 +67,10 @@
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
   });
-  it("resonate() one or many", ()=>{
+  it("TESTTESTresonate() one or many", ()=>{
     let verbose = 0;
     let r1 = new Resonator();
     let r2 = new Resonator();
-    console.log(`r1`, r1);
     let nSamples = 400;
 
     // resonate can be single-stepped with some degree of precision

@@ -185,7 +185,7 @@
     should(error).below(0.21); // error rate decreases with frequency
     should(pitch).equal(170.16646563135347); // different than E1
   });
-  it("TESTTESTpitch() changing frequencies", ()=>{
+  it("pitch() changing frequencies", ()=>{
     let verbose = 0;
     let frequency = 200;
     let dFreq = -2;
@@ -212,7 +212,7 @@
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(pitch).equal(200.35726481680805);  // pitch is determined from mid-sample
   });
-  it("pitch() sin FREQ_WOMAN", ()=>{
+  it("pitch() FREQ_WOMAN", ()=>{
     let verbose = 0;
     let frequency = FREQ_WOMAN;
     let phase = Math.random()*2*Math.PI; 
@@ -233,7 +233,7 @@
     should(pitch).above(frequency-e).below(frequency+e);
     should(pitch).above(frequency-e).below(frequency+e);
   });
-  it("pitch() sin FREQ_CHILD (scale, typedarray)", ()=>{
+  it("pitch() FREQ_CHILD (scale, typedarray)", ()=>{
     let verbose = 0;
     let frequency = FREQ_CHILD;
     let phase = Math.random()*2*Math.PI; 
@@ -255,31 +255,7 @@
       window: yp.window, tauMin: yp.tauMin, tauMax: yp.tauMax, });
     should(error).below(0.08); // error rate decreases with frequency
   });
-  it("frequencies", async()=>{
-    // TODO: delete after 2021.10.11
-    let verbose = 0;
-    let frequency = 7*160;
-    let phase = 2*Math.PI*0.25;
-    let nSamples = MIN_SAMPLES;
-    let sustain = 1;
-    let scale = 16384;
-    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain, scale, type:Int16Array });
-
-    let frameSize = 192;
-    let nFrames = Math.floor((samples.length + frameSize-1)/frameSize);
-    should(nFrames).equal(5);
-    let FINAL_ENCODING_BLOCK = 1; // required if signal ends with less than frameSize/2 zeros
-    let nCoeffBlocks = 2*nFrames + FINAL_ENCODING_BLOCK;
-    let type = Float32Array;
-    let mdct = new Mdct({frameSize});
-    let encodedGen = mdct.encodeFrames(samples, {type:Float32Array});
-    let encoded = [...encodedGen];
-    console.log(`encoded`, {length:encoded.length, first:encoded[0].slice(0,50)});
-    let chart = new Chart();
-    chart.plot({data:[encoded[0]]});
-    chart.plot({data:[samples.slice(-96)], xInterval:1});
-  });
-  it("phaseAmplitude() sin 140Hz", ()=>{
+  it("TESTTESTphaseAmplitude() sin 140Hz", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
@@ -296,7 +272,7 @@
     let yp = new YinPitch();
     let pa = yp.phaseAmplitude({samples, frequency});
     let { real, imaginary } = pa.phasor;
-    console.log(`DEBUG`, {
+    verbose && console.log(`DEBUG`, {
       pa, samplesPerCycle, nSamples, sampleRate, samplePeriod, 
       frequency, period, phase, scale, 
       pi2: Math.PI/2});

@@ -185,23 +185,6 @@
       return samples;
     }
 
-    filter(iterable) {
-      return this.createIterator(iterable);
-    }
-
-    *createIterator(iterable) {
-      let iter = iterable[Symbol.iterator]();
-      assert(iter != null && typeof iter.next === 'function', `[E_ITERABLE] Expected iterable)`);
-      for(;;) {
-        let { value, done } = iter.next();
-        if (done) {
-          break;
-        }
-        let y = this.step(value);
-        yield y;
-      }
-    }
-
   }
 
   module.exports = exports.Resonator = Resonator;
