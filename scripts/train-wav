@@ -5,12 +5,11 @@ if [ "$1" ]; then LAYERS=$1;    shift; else LAYERS=3;       fi
 if [ "$1" ]; then CODESIZE=$1;  shift; else CODESIZE=96;    fi
 if [ "$1" ]; then FRAMESIZE=$1; shift; else FRAMESIZE=192;  fi
 if [ "$1" ]; then NOISE=$1;     shift; else NOISE=0;        fi
-if [ "$1" ]; then FRMAGG=$1;    shift; else FRMAGG=none;    fi
 if [ "$1" ]; then EPOCHS=$1;    shift; else EPOCHS=100;     fi
 if [ "$1" ]; then EPOCH1=$1;    shift; else EPOCH1=0;       fi
 if [ "$1" ]; then UNITS=$1;     shift; else UNITS=9;        fi
 
-MODELCFG=w${WAVFRAMES}l${LAYERS}c${CODESIZE}f${FRAMESIZE}e${EPOCHS}n${NOISE}_${FRMAGG}
+MODELCFG=w${WAVFRAMES}l${LAYERS}c${CODESIZE}f${FRAMESIZE}e${EPOCHS}n${NOISE}
 echo "LAYERS=$LAYERS UNITS=$UNITS CODESIZE=$CODESIZE" \
   "MODELCFG=$MODELCFG NOISE=$NOISE EPOCHS=$EPOCHS FRAMESIZE=$FRAMESIZE"
 TRAIN=an9.20_4.3
@@ -33,7 +32,6 @@ scripts/wav-coder \
   -el $LAYERS \
   -ep $EPOCHS \
   -eu 0.$UNITS \
-  -fa $FRMAGG \
   -fs $FRAMESIZE \
   -ie $EPOCH1 \
   -mp $MODEL \
@@ -54,7 +52,6 @@ ALTAUDIO=evam-me-suttam
 echo "Testing $ALTAUDIO..."
 scripts/wav-coder \
   -mp $MODEL \
-  -fa $FRMAGG \
   -si test/data/$ALTAUDIO.wav \
   -so $MODELDIR/$ALTAUDIO.wav \
   -fs $FRAMESIZE \

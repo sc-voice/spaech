@@ -71,39 +71,6 @@
       });
     }
 
-    /*
-     * A frame aggregate vector factory
-     * NOTE: Aggregate vectors are generally useless since
-     * the equation of the aggregate is opaque to the neural net optimizer
-     */
-    static aggFrame(frameSize, scale=1, aggregate='cos') { // DEPRECATED
-      let fAgg = aggregate.split(':')[0];
-      let random;
-      if (fAgg === 'cos') {
-        fAgg = Math.cos;
-      } else if (fAgg === 'cosr') {
-        random = Math.random();
-        fAgg = (function cosr(x) { return Math.cos(x+2*Math.PI*random)});
-      } else if (fAgg === 'sin') {
-        fAgg = Math.sin;
-      } else if (fAgg === '0') {
-        fAgg = (function zero(x) { return 0});
-      } else {
-        assert(false, `[E_AGG_FUN] expected aggregate function name:${fAgg}`); 
-      }
-      let key = `${fAgg.name}_${frameSize}_${scale}`;
-      let aggFrame = AGG_MAP[key] || [];
-      if (aggFrame.length === 0) {
-        for (let i = 0; i < frameSize; i++) {
-          let t = i / frameSize;
-          let v = fAgg(2*Math.PI*t);
-          aggFrame.push(scale*v);
-        }
-      }
-      isNaN(random) && (AGG_MAP[key] = aggFrame);
-      return aggFrame;
-    }
-
     /**
      * Scale signal and split it up into frames for each detected word.
      */
@@ -113,19 +80,10 @@
         threshold = 2,    // minimum signal that starts word
         dampen,           // minium number of samples at or above threshold 
         scale = 16384,    // normalization to interval [0,1]
-        aggregate = null, // extend each frame with given frame aggregate
         output = false,
       } = opts;
       assert(!isNaN(frameSize), `[E_FRAMESIZE] frameSize is required:${frameSize}`);
       assert(signal instanceof Signal, 'signal must be a Signal');
-      if (aggregate) {
-        assert(typeof scale === 'number' || typeof scale[frameSize] === 'number',
-          `[E_SCALE] scale must have value for frame aggregate:${scale}`);
-        if (typeof aggregate === 'string') {
-          let aggVec = AutoEncoder.aggFrame(frameSize, 1, aggregate);
-          aggregate = (a,v,i) => v*aggVec[i] + a;
-        }
-      }
       dampen = dampen == null 
         ? (threshold ? 36 : 0) 
         : dampen;
@@ -153,23 +111,7 @@
           frame = scale instanceof Array
             ? frame.map((v,i)=>v/scale[i])
             : frame.map((v,i)=>v/scale);
-          if (aggregate) {
-            let agg = frame.reduce(aggregate, 0);
-            aggMax < agg && (aggMax = agg);
-            agg < aggMin && (aggMin = agg);
-            frame.push(agg);
-          }
           frames.push(frame); 
-        }
-      }
-      if (aggregate) {
-        let denominator = Math.max(Math.abs(aggMin), Math.abs(aggMax)); 
-        if (denominator) {
-          let aggScale = 1 / denominator;
-          frames = frames.map(f=>{
-            f[frameSize] *= aggScale;
-            return f;
-          });
         }
       }
 

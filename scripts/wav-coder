@@ -83,15 +83,6 @@ DESCRIPTION
     -le, --log-epoch N
         Log training stats every every N epochs (10)
 
-    -fa, --frame-aggregate AGG_NAME
-        Since the audio signal is broken up into frames, the decoded signal will 
-        contain a low-frequency "frame noise buzz" (FNB) at a frequency of 22050/frameSize Hz. 
-        Adding a frame aggregate input to each frame reduces FNB. AGG_NAME can be:
-        none (no aggregate), cos (cosine), cosr (cosine with random phase), 0 (no aggregate).
-        If output aggregates are different from input aggregates, separate them with
-        underscore (e.g., cosr_0). See also scripts/wav-fft for WAV FFT analysis.
-       (none)
-        
     -fs, --frame-size
         Audio is encoded/decoded by consecutive frames of given size. (192)
 
@@ -217,8 +208,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.noiseAmplitude = requiredNumber();
   } else if (arg === '-nk' || arg === '--noise-amplitude-k') {
     cmdCfg.noiseAmplitude = requiredNumber()/1000;
-  } else if (arg === '-fa' || arg === '--frame-aggregate') {
-    cmdCfg.frameAggregate = requiredArg();
   } else if (arg === '-fs' || arg === '--frame-size') {
     cmdCfg.frameSize = requiredNumber();
   } else if (arg === '-sv' || arg === '--signal-validation') {
@@ -266,7 +255,7 @@ function normalizeUrl(urlOrPath) {
 
 async function configuration(cfg=cmdCfg) {
   let { 
-    encoderUnits, decoderLayers, frameSize=192, frameAggregate,
+    encoderUnits, decoderLayers, frameSize=192, 
     scaleIn=16384, scaleOut=16384,
     signalExpected, signalIn, signalValidation, signalValidationExpected,
     inputSize,
@@ -291,13 +280,6 @@ async function configuration(cfg=cmdCfg) {
   assert(!isNaN(inputSize), `[E_INPUTSIZE] expected number:${inputSize}`);
   let outputSize = frameSize;
   scaleIn = await initializeScale(scaleIn, inputSize);
-  if (frameAggregate === 'none') {
-    frameAggregate = undefined;
-  }
-  if (frameAggregate) {
-    inputSize += wavFrames;
-    outputSize++;
-  }
 
   return Object.assign({}, {
     batchSize: 128,
@@ -332,7 +314,6 @@ async function configuration(cfg=cmdCfg) {
     signalValidationExpected,
     signalExpected,
     wavFrames,
-    frameAggregate,
   });
 }
 
@@ -494,29 +475,11 @@ async function train({statsCurrent, iTrain, coder, valOpts,
 }
 
 async function writeValidationSignal(args={}) {
-  let {inputsVal, scaleOut, coder, signalOut, frameSize, frameAggregate} = args;
+  let {inputsVal, scaleOut, coder, signalOut, frameSize, } = args;
   let predicted = (await coder.predict(inputsVal));
   let scaled = new Int16Array(scaleOut instanceof Array 
     ? predicted.map((v,i)=>v*scaleOut[i])
     : predicted.map((v)=>v*scaleOut));
-  if (frameAggregate) {
-    let scaledLen = frameSize * scaled.length / (frameSize+1);
-    let scaled2 = new Int16Array(scaledLen);
-    for (let i=0,j=0; i < scaledLen; i+=frameSize, j+=frameSize+1) {
-      scaled2.set(scaled.subarray(j,j+frameSize), i);
-    }
-    scaled = scaled2;
-  console.log(`scaled DEBUG`, scaledLen);
-  /*
-    let p = [];
-    while (predicted.length) {
-      p = p.concat(predicted.slice(0,frameSize));
-      predicted = predicted.slice(frameSize+1);
-    }
-    predicted = p;
-    logger.info(`writeValidationSignal() pruning frameAggregate:${frameAggregate}`, predicted.length);
-    */
-  }
 
   let sigOut = new Signal(scaled);
   await writeSignal(signalOut, sigOut);
@@ -551,7 +514,6 @@ function inputsOfFrames(frames, inputSize) {
     dampen=0,
     epochs, 
     frameSize,
-    frameAggregate,
     initialEpoch, 
     inputSize,
     outputSize,
@@ -573,7 +535,7 @@ function inputsOfFrames(frames, inputSize) {
   logger.info(script, argv.slice(2).join(' '));
   logger.debug(`command options parsed as`, cfg);
 
-  let frameOpts = {frameSize, threshold, dampen, scale:scaleOut, aggregate:frameAggregate};
+  let frameOpts = {frameSize, threshold, dampen, scale:scaleOut, };
   let frameOptsIn = Object.assign({output:false}, frameOpts);
   let frameOptsOut = Object.assign({output:true}, frameOpts);
   let trainSig = await wavSignal(signalIn);
@@ -596,10 +558,10 @@ function inputsOfFrames(frames, inputSize) {
     ? inputs
     : inputsOfFrames(valFrames, inputSize);
   assertNumbers(inputsVal, `[E_NAN] inputsVal`);
-  let outputs = signalIn === signalExpected && !frameAggregate
+  let outputs = signalIn === signalExpected 
     ? inputFrames
     : AutoEncoder.frameSignal(expSig, frameOptsOut).frames;
-  let outputsVal = signalIn === signalValidationExpected && !frameAggregate
+  let outputsVal = signalIn === signalValidationExpected 
     ? outputs
     : AutoEncoder.frameSignal(valExpSig, frameOptsOut).frames;
   logger.info(`frames:`, outputs.length, 'x', outputs[0].length, `signalIn:${signalIn}`);
@@ -612,7 +574,7 @@ function inputsOfFrames(frames, inputSize) {
   let valOpts = {inputs:inputsVal, outputs:outputsVal, frameSize};
   let statsCurrent = await coder.validateSignal(valSig, valOpts);
   let sigOut;
-  let writeOpts = {inputsVal, scaleOut, coder, signalOut, frameSize, frameAggregate};
+  let writeOpts = {inputsVal, scaleOut, coder, signalOut, frameSize, };
 
   if (trainAttempts) {
     model.summary();
