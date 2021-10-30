@@ -57,13 +57,9 @@
     }
 
     // Equation (1) with window left-aligned to time (i.e., t=0)
-    static yinE1(samples, t, tau, w) {  
-      assert(0<=t && t+w+tau<=samples.length, 
-        `[E_E1_BOUNDS] yinE1 bounds violation [${t}, ${t+w+tau}] `+
-        `samples:${samples.length}`);
-
+    static yinE1(samples, t1, tau, w) {  
       let sum = 0;
-      for (let i = t; i < t+w; i++) {
+      for (let i = t1; i < t1+w; i++) {
         sum += samples[i] * samples[i+tau];
       }
       return sum;
@@ -112,15 +108,29 @@
       return 2*tauMax - tauMin + window;
     }
 
-    autoCorrelate(samples, t, tau) {
-      return YinPitch.yinE1(samples, t, tau, this.window);
+    autoCorrelate(samples, t1, tau, w=this.window) {
+      let sum = 0;
+      for (let i = t1; i < t1+w; i++) {
+        sum += samples[i] * samples[i+tau];
+      }
+      return sum;
     }
 
-    acfDifference(samples, t, tau) {
-      let acft0 = this.autoCorrelate(samples, t, 0);
-      let acftau0 = this.autoCorrelate(samples, t+tau, 0); 
-      let acfttau = this.autoCorrelate(samples, t, tau);
-      return acft0 + acftau0 - 2*acfttau;
+    acfDifference(samples, t1, tau) {
+      let { window, tauMax, tSample } = this;
+      let nSamples = samples.length;
+      let tw = t1 + window -1;
+      try {
+        assert(0 <= t1, `[E_T1_LOW]`);
+        assert(tw < nSamples, `[E_T1_HIGH`);
+        let acft0 = this.autoCorrelate(samples, t1, 0, window);
+        let acftau0 = this.autoCorrelate(samples, t1+tau, 0, window); 
+        let acfttau = this.autoCorrelate(samples, t1, tau, window);
+        return acft0 + acftau0 - 2*acfttau;
+      } catch(e) {
+        console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax, tSample}));
+        throw e;
+      }
     }
 
     pitch(samples, tSample = this.tSample) {
@@ -137,28 +147,19 @@
 
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
-        let t1 = tSample ? Math.round(tSample - tau/2) : 0;
+        let t1 = tSample ? Math.round(tSample - tau/2 - window/2) : 0;
         let tw = t1 + window -1;
         try {
-          let rt0 = rFun(samples, t1, 0, window);
-          assert(0 <= t1, `[E_T1_LOW] t1:${t1} tSample:${tSample} tau:${tau} nSamples:${nSamples}`);
-          assert(tw<nSamples, 
-            `[E_T1_HIGH] tw:${tw} tSample:${tSample} tau:${tau} nSamples:${nSamples}`);
-          if (rt0/window < minPower) {
-            return result;
-          }
-          // let v = acfDifference(samples, t1, tau); 
-          // INLINE OPTIMIZATION (START)
-          var rtau0 = rFun(samples, t1+tau, 0, window); 
-          var rttau = rFun(samples, t1, tau, window);
-          var v = rt0 + rtau0 - 2*rttau;
-          // INLINE OPTIMIZATION (END)
+          //if (rt0/window < minPower) {
+           // return result;
+          //}
+          var v = this.acfDifference(samples, t1, tau, window);
+          assert(!isNaN(v), `[E_NAN_ACFDIFF] t1:${t1} tau:${tau}`);
         } catch(e) {
-          console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax}));
+          console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax, tSample}));
           throw e;
         }
 
-        assert(!isNaN(v), `[E_NAN_ACFDIFF] t1:${t1} tau:${tau}`);
         acf.push(v);
         if (tau >= tauMax) {
           break;

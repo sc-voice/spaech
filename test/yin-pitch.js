@@ -236,8 +236,8 @@
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.33); // error rate goes down as sustain approaches 1
   });
-  it("TESTTESTpitch() sin FREQ_ADULT", ()=>{
-    let verbose = 1;
+  it("pitch() sin FREQ_ADULT (E1)", ()=>{
+    let verbose = 0;
     let frequency = FREQ_ADULT;
     let phase = Math.random()*2*Math.PI; 
     verbose && (phase = 3.602657466317041);
@@ -261,6 +261,34 @@
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.21); // error rate decreases with frequency
     verbose && should(pitch).equal(169.97871589219946);
+  });
+  it("TESTTESTpitch() sin FREQ_ADULT (EA1)", ()=>{
+    let verbose = 0;
+    let frequency = FREQ_ADULT;
+    let phase = Math.random()*2*Math.PI; 
+    verbose && (phase = 3.602657466317041);
+    let sustain = 0.999;
+    let rFun = YinPitch.yinE1;
+    let tSample = 420;
+    let yp = new YinPitch({rFun, tSample});
+    let nSamples = yp.minSamples; 
+    should(nSamples).equal(840);
+    let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
+    let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
+    let xInterval = 10;
+    let lines = 7;
+    verbose && (new Chart({title:'samples',data:[samples],xInterval,lines})).plot();
+    verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval,lines})).plot();
+    let error = Math.abs(pitch-frequency);
+    verbose && console.log(`YIN`, {
+      frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
+      window: yp.window,
+      tauMin: yp.tauMin,
+      tauMax: yp.tauMax,
+    });
+    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
+    should(error).below(0.21); // error rate decreases with frequency
+    verbose && should(pitch).equal(170.16646563135347);
   });
   it("pitch() sin FREQ_WOMAN", ()=>{
     let verbose = 0;
