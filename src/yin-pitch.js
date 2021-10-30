@@ -28,7 +28,6 @@
         fMax = FMAX,
         fMin = FMIN,
         rFun = YinPitch.yinEA1,
-        minPower = 0,
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
         sampleRate = 22050,
@@ -46,7 +45,6 @@
         fMin,
         minAmplitude,
         maxAmplitude,
-        minPower,
         rFun,
         sampleRate,
         tauMax,
@@ -117,25 +115,28 @@
     }
 
     acfDifference(samples, t1, tau) {
-      let { window, tauMax, tSample } = this;
-      let nSamples = samples.length;
-      let tw = t1 + window -1;
       try {
+        let { window, tauMax, tSample } = this;
+        let nSamples = samples.length;
+        let tw = t1 + window -1;
         assert(0 <= t1, `[E_T1_LOW]`);
         assert(tw < nSamples, `[E_T1_HIGH`);
+
         let acft0 = this.autoCorrelate(samples, t1, 0, window);
         let acftau0 = this.autoCorrelate(samples, t1+tau, 0, window); 
         let acfttau = this.autoCorrelate(samples, t1, tau, window);
-        return acft0 + acftau0 - 2*acfttau;
+        let v =  acft0 + acftau0 - 2*acfttau;
+        assert(!isNaN(v), `[E_NAN_ACFDIFF] t1:${t1} tau:${tau}`);
+        return v;
       } catch(e) {
         console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax, tSample}));
         throw e;
       }
     }
 
-    pitch(samples, tSample = this.tSample) {
+    pitch(samples) {
       let { 
-        rFun, minPower, minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax, 
+        minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax, tSample,
       } = this;
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
@@ -148,18 +149,7 @@
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
         let t1 = tSample ? Math.round(tSample - tau/2 - window/2) : 0;
-        let tw = t1 + window -1;
-        try {
-          //if (rt0/window < minPower) {
-           // return result;
-          //}
-          var v = this.acfDifference(samples, t1, tau, window);
-          assert(!isNaN(v), `[E_NAN_ACFDIFF] t1:${t1} tau:${tau}`);
-        } catch(e) {
-          console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax, tSample}));
-          throw e;
-        }
-
+        let v = this.acfDifference(samples, t1, tau, window);
         acf.push(v);
         if (tau >= tauMax) {
           break;
