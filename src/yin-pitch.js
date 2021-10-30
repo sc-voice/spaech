@@ -18,6 +18,8 @@
   const Chart = require('./chart');
 
   // http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf
+  // E1 is Equation (1) with pitch sampleIndex of 0
+  // EA3 is Equation (A1) with pitch sampleIndex at mid-sample
 
   class YinPitch {
     constructor(args={}) {
@@ -30,6 +32,7 @@
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
         sampleRate = 22050,
+        tSample = 0,
         window = WINDOW_25MS,
       } = args;
       assert(Number.isInteger(window) && 0<window, 
@@ -48,6 +51,7 @@
         sampleRate,
         tauMax,
         tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
+        tSample,
         window,
       });
     }
@@ -59,7 +63,7 @@
         `samples:${samples.length}`);
 
       let sum = 0;
-      for (let i = t+1; i <= t+w; i++) {
+      for (let i = t; i < t+w; i++) {
         sum += samples[i] * samples[i+tau];
       }
       return sum;
@@ -69,8 +73,9 @@
     static yinEA1(samples, t, tau, w) {
       let sum = 0;
       let nSamples = samples.length;
-      let iStart = Math.ceil(t - tau/2 - w/2);
-      let iEnd = Math.floor(t - tau/2 + w/2);
+      let iStart = Math.round(t - tau/2 - w/2);
+      let iEnd = iStart + w - 1;
+      //console.log(`yinEA1`, iEnd-iStart);
       assert(0<=iStart && iStart<nSamples,
         `[E_EA1_START] yinEA1 bounds violation:\n`+
         JSON.stringify({iStart, iEnd, t, tau, nSamples}));
@@ -99,7 +104,7 @@
     }
 
     get minSamples() {
-      let { rFun, window, tauMax, tauMin } = this;
+      let { rFun, window, tauMax, tauMin, tSample, } = this;
       if (rFun === YinPitch.yinE1) {
         return tauMax + window + 1;
       }
@@ -117,7 +122,7 @@
       return acft0 + acftau0 - 2*acfttau;
     }
 
-    pitch(samples) {
+    pitch(samples, tSample = this.tSample) {
       let { 
         rFun, minPower, minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax, 
       } = this;
@@ -126,30 +131,32 @@
       let nSamples = samples.length;
       assert(minSamples<=nSamples, `[E_NSAMPLES] expected:${minSamples} actual:${nSamples}`);
       let acf = [...new Int8Array(tauMin)].fill(diffMax+1); // ignore tau below tauMin
-      let tSample  = rFun === YinPitch.yinEA1 ? Math.floor((nSamples-1)/2) : 0;
       let result = { pitch:0, pitchEst:0, tau:0, tauEst:0, tSample, tauMax, tauMin};
       Object.defineProperty(result, 'acf', {value:acf});
 
-
-      let rt0 = rFun(samples, tSample, 0, window);
+      let t1 = tSample ? tSample - tauMax/2 : 0;
+      assert(0 <= t1, `[E_T1_LOW] t1:${t1}  tSample:${tSample} tauMax:${tauMax} nSamples:${nSamples}`);
+      assert(t1+window<nSamples, 
+        `[E_T1_HIGH] tW:${t1+window-1}  tSample:${tSample} tauMax:${tauMax} nSamples:${nSamples}`);
+      let rt0 = rFun(samples, t1, 0, window);
       if (rt0/window < minPower) {
         return result;
       }
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
         try {
-          // let v = acfDifference(samples, tSample, tau); 
+          // let v = acfDifference(samples, t1, tau); 
           // INLINE OPTIMIZATION (START)
-          var rtau0 = rFun(samples, tSample+tau, 0, window); 
-          var rttau = rFun(samples, tSample, tau, window);
+          var rtau0 = rFun(samples, t1+tau, 0, window); 
+          var rttau = rFun(samples, t1, tau, window);
           var v = rt0 + rtau0 - 2*rttau;
           // INLINE OPTIMIZATION (END)
         } catch(e) {
-          console.warn(`Error: ${e.message}`, JSON.stringify({tSample, tau, window, tauMax}));
+          console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax}));
           throw e;
         }
 
-        assert(!isNaN(v), `[E_NAN_ACFDIFF] tSample:${tSample} tau:${tau}`);
+        assert(!isNaN(v), `[E_NAN_ACFDIFF] t1:${t1} tau:${tau}`);
         acf.push(v);
         if (tau >= tauMax) {
           break;

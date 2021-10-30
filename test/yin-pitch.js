@@ -63,7 +63,7 @@
 
     should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
   });
-  it("yinE1()", ()=>{
+  it("TESTTESTyinE1()", ()=>{
     let verbose = 0;
     let nSamples = 100;
     let frequency = 700;
@@ -85,7 +85,7 @@
     verbose && (new Chart({title:`yinE1 t:${t}`, data:acva})).plot();
 
     // peaks depend on window size
-    should.deepEqual(stats.map(s=>s.iMax), [ 34, 2, 33, 64, 32 ]);
+    should.deepEqual(stats.map(s=>s.iMax), [ 66, 34, 2, 33, 64, ]);
   });
   it("yinEA1()", ()=>{
     let verbose = 0;
@@ -109,7 +109,7 @@
     verbose && (new Chart({title:`yinEA1 t:${t}`, data:acva})).plot();
 
     // peaks depend on window size
-    should.deepEqual(stats.map(s=>s.iMax), [ 0, 63, 0, 63, 0 ]);
+    should.deepEqual(stats.map(s=>s.iMax), [ 63, 0, 63, 0, 63 ]);
   });
   it("autoCorrelate()", ()=>{
     let verbose = 0;
@@ -130,7 +130,7 @@
     verbose && (new Chart({data:acva})).plot();
 
     // peaks depend on window size
-    should.deepEqual(stats.map(s=>s.iMax), [ 34, 2, 33, 64, 32 ]);
+    should.deepEqual(stats.map(s=>s.iMax), [ 66, 34, 2, 33, 64 ]);
   });
   it("acfDifference()", ()=>{
     let verbose = 0;
@@ -154,7 +154,7 @@
     );
 
     // The computed Q will be an integer multiple of the original Q
-    should.deepEqual(daz, [2*Q, Q, Q, Q, Q]);
+    should.deepEqual(daz, [Q, Q, Q, Q, Q]);
     let title=`LEGEND: 1:samples, 2:ACFdifference/10`;
     verbose && (new Chart({title,data:[samples, da[2].map(v=>v/10)]})).plot();
   });
@@ -172,8 +172,9 @@
   it("TESTTESTpitch() yinE1 vs yinEA1", ()=>{
     return; // TODO
     let verbose = 1;
-    let frequency = 200;
-    let dFreq = 1;
+    let frequency = 200 + 10*Math.random();
+    verbose && (frequency = 203.3714002714288); // throws
+    let dFreq = 0;
     let frequency1 = frequency+dFreq;
     let frequency2 = frequency-dFreq;
     let phase = Math.random()*2*Math.PI; 
@@ -181,26 +182,31 @@
     let hr = new Resonator({frequency:frequency1});
     let yp = new YinPitch({rFun});
     let nSamples = yp.minSamples;
-    let samples = hr.oscillate({ frequency:frequency2, nSamples, tween:true});
+    let samples = hr.oscillate({ frequency:frequency2, nSamples, tween:1});
     let { tauMin, tauMax, window } = yp;
-    console.log({tauMin, tauMax, iEnd: tauMax + nSamples/2 + window/2, nSamples: samples.length});
-    let ypRes = yp.pitch(samples);
-    console.log({ypRes});
-    let { pitch, pitchEst, tau, tauEst, acf, tSample, } = ypRes;
-    let title=`LEGEND: 1:samples, 2:ACFdifference`;
-    let xInterval = 4;
-    verbose && (new Chart({title:'samples',data:[samples],xInterval,lines:7})).plot();
-    //verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval})).plot();
-    let error = Math.abs(pitch-frequency);
-    verbose && console.log(`YIN`, {
-      frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
-      window: yp.window,
-      tauMin: yp.tauMin,
-      tauMax: yp.tauMax,
-    });
-    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
-    should(error).below(0.33); // error rate goes down as sustain approaches 1
-    should(tSample).equal(nSamples/2-1);
+    verbose && console.log({tauMin, tauMax, nSamples});
+    try {
+      let ypRes = yp.pitch(samples);
+      verbose && console.log(`ypRes`, JSON.stringify(ypRes));
+      let { pitch, pitchEst, tau, tauEst, acf, tSample, } = ypRes;
+      let title=`LEGEND: 1:samples, 2:ACFdifference`;
+      let xInterval = 4;
+      verbose && (new Chart({title:'samples',data:[samples],xInterval,lines:5})).plot();
+      //verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval})).plot();
+      let error = Math.abs(pitch-frequency);
+      verbose && console.log(`YIN`, {
+        frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
+        window: yp.window,
+        tauMin: yp.tauMin,
+        tauMax: yp.tauMax,
+      });
+      should(pitch).above(0, `could not detect pitch for phase:${phase}`);
+      should(error).below(0.33); // error rate goes down as sustain approaches 1
+      should(tSample).equal(Math.floor(nSamples/2));
+    } catch(e) {
+      console.warn(`[ERROR] ${e.message}`, { frequency, });
+      throw e;
+    }
   });
   it("pitch() sin FREQ_MAN", ()=>{
     let verbose = 0;
@@ -238,8 +244,9 @@
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
     let xInterval = 10;
-    verbose && (new Chart({title:'samples',data:[samples],xInterval})).plot();
-    verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval})).plot();
+    let lines = 7;
+    verbose && (new Chart({title:'samples',data:[samples],xInterval,lines})).plot();
+    verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval,lines})).plot();
     let error = Math.abs(pitch-frequency);
     verbose && console.log(`YIN`, {
       frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
