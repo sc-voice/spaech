@@ -58,7 +58,7 @@
 
     // Equation (1) with window left-aligned to time (i.e., t=0)
     static yinE1(samples, t, tau, w) {  
-      assert(0<=t && t+w+tau<samples.length, 
+      assert(0<=t && t+w+tau<=samples.length, 
         `[E_E1_BOUNDS] yinE1 bounds violation [${t}, ${t+w+tau}] `+
         `samples:${samples.length}`);
 
@@ -105,6 +105,7 @@
 
     get minSamples() {
       let { rFun, window, tauMax, tauMin, tSample, } = this;
+      return tauMax + window;
       if (rFun === YinPitch.yinE1) {
         return tauMax + window + 1;
       }
@@ -134,17 +135,18 @@
       let result = { pitch:0, pitchEst:0, tau:0, tauEst:0, tSample, tauMax, tauMin};
       Object.defineProperty(result, 'acf', {value:acf});
 
-      let t1 = tSample ? tSample - tauMax/2 : 0;
-      assert(0 <= t1, `[E_T1_LOW] t1:${t1}  tSample:${tSample} tauMax:${tauMax} nSamples:${nSamples}`);
-      assert(t1+window<nSamples, 
-        `[E_T1_HIGH] tW:${t1+window-1}  tSample:${tSample} tauMax:${tauMax} nSamples:${nSamples}`);
-      let rt0 = rFun(samples, t1, 0, window);
-      if (rt0/window < minPower) {
-        return result;
-      }
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
+        let t1 = tSample ? Math.round(tSample - tau/2) : 0;
+        let tw = t1 + window -1;
         try {
+          let rt0 = rFun(samples, t1, 0, window);
+          assert(0 <= t1, `[E_T1_LOW] t1:${t1} tSample:${tSample} tau:${tau} nSamples:${nSamples}`);
+          assert(tw<nSamples, 
+            `[E_T1_HIGH] tw:${tw} tSample:${tSample} tau:${tau} nSamples:${nSamples}`);
+          if (rt0/window < minPower) {
+            return result;
+          }
           // let v = acfDifference(samples, t1, tau); 
           // INLINE OPTIMIZATION (START)
           var rtau0 = rFun(samples, t1+tau, 0, window); 

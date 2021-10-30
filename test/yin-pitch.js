@@ -33,7 +33,7 @@
     return new Array(n).fill(0);
   }
 
-  it("default ctor()", ()=>{
+  it("TESTTESTdefault ctor()", ()=>{
     let verbose = 0;
     let window = WINDOW_25MS;
     let sampleRate = 22050; // default
@@ -41,12 +41,15 @@
     let fMax = FMAX;
     let tauMin = TAU_MIN;
     let tauMax = TAU_MAX;
-    let minSamples = window + 2*tauMax - tauMin;
+    let minSamples = window + tauMax;
+    let tSample = 0;
     let rFun = YinPitch.yinEA1;
     let diffMax = 0.1; // acceptable ACF difference
     let yp = new YinPitch();
 
-    should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
+    should(yp).properties({ 
+      window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples, tSample,
+    });
   });
   it("yinE1 ctor()", ()=>{
     let verbose = 0;
@@ -56,14 +59,14 @@
     let fMax = FMAX;
     let tauMin = TAU_MIN;
     let tauMax = TAU_MAX;
-    let minSamples = window + tauMax + 1;
+    let minSamples = window + tauMax;
     let rFun = YinPitch.yinE1;
     let diffMax = 0.1; // acceptable ACF difference
     let yp = new YinPitch({rFun});
 
     should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
   });
-  it("TESTTESTyinE1()", ()=>{
+  it("yinE1()", ()=>{
     let verbose = 0;
     let nSamples = 100;
     let frequency = 700;
@@ -233,10 +236,11 @@
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.33); // error rate goes down as sustain approaches 1
   });
-  it("pitch() sin FREQ_ADULT", ()=>{
-    let verbose = 0;
+  it("TESTTESTpitch() sin FREQ_ADULT", ()=>{
+    let verbose = 1;
     let frequency = FREQ_ADULT;
     let phase = Math.random()*2*Math.PI; 
+    verbose && (phase = 3.602657466317041);
     let sustain = 0.999;
     let rFun = YinPitch.yinE1;
     let yp = new YinPitch({rFun});
@@ -256,6 +260,7 @@
     });
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.21); // error rate decreases with frequency
+    verbose && should(pitch).equal(169.97871589219946);
   });
   it("pitch() sin FREQ_WOMAN", ()=>{
     let verbose = 0;
