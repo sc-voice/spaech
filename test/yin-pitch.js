@@ -131,15 +131,16 @@
       tauMax: yp.tauMax,
     });
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
-    should(error).below(0.33); // error rate goes down as sustain approaches 1
+    should(error).below(0.39); // error rate goes down as sustain approaches 1
   });
-  it("pitch() sin FREQ_ADULT (E1)", ()=>{
+  it("pitch() FREQ_ADULT (E1)", ()=>{
     let verbose = 0;
     let frequency = FREQ_ADULT;
-    let phase = Math.random()*2*Math.PI; 
-    verbose && (phase = 3.602657466317041);
+    let phase = 3.602657466317041;
     let sustain = 0.999;
-    let yp = new YinPitch();
+    let tSample = 0; // equation (1)
+    let yp = new YinPitch({tSample});
+    should(yp).properties({tSample});
     let nSamples = yp.minSamples;
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
@@ -156,15 +157,14 @@
     });
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.21); // error rate decreases with frequency
-    verbose && should(pitch).equal(169.97871589219946);
+    should(pitch).equal(169.97871589219946);
   });
-  it("pitch() sin FREQ_ADULT (EA1)", ()=>{
+  it("pitch() FREQ_ADULT (EA1)", ()=>{
     let verbose = 0;
     let frequency = FREQ_ADULT;
-    let phase = Math.random()*2*Math.PI; 
-    verbose && (phase = 3.602657466317041);
+    let phase = 3.602657466317041;
     let sustain = 0.999;
-    let tSample = 420;
+    let tSample = 420;  // equation (A1)
     let yp = new YinPitch({tSample});
     let nSamples = yp.minSamples; 
     should(nSamples).equal(840);
@@ -183,7 +183,34 @@
     });
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.21); // error rate decreases with frequency
-    verbose && should(pitch).equal(170.16646563135347); // different than E1
+    should(pitch).equal(170.16646563135347); // different than E1
+  });
+  it("TESTTESTpitch() changing frequencies", ()=>{
+    let verbose = 0;
+    let frequency = 200;
+    let dFreq = -2;
+    let frequency1 = frequency - dFreq;
+    let frequency2 = frequency + dFreq;
+    let phase = 3.602657466317041;
+    let yp = new YinPitch();
+    let tSample = 1000;
+    let nSamples = 2000;
+    let hr = new Resonator({frequency:frequency1, phase});
+    let samples = hr.oscillate({frequency:frequency2, tween:1, nSamples});
+    let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
+    let xInterval = 10;
+    let lines = 7;
+    verbose && (new Chart({title:'samples',data:[samples],xInterval,lines})).plot();
+    verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval,lines})).plot();
+    let error = Math.abs(pitch-frequency);
+    verbose && console.log(`YIN`, {
+      frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
+      window: yp.window,
+      tauMin: yp.tauMin,
+      tauMax: yp.tauMax,
+    });
+    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
+    should(pitch).equal(200.35726481680805);  // pitch is determined from mid-sample
   });
   it("pitch() sin FREQ_WOMAN", ()=>{
     let verbose = 0;
