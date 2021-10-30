@@ -33,7 +33,7 @@
     return new Array(n).fill(0);
   }
 
-  it("TESTTESTdefault ctor()", ()=>{
+  it("default ctor()", ()=>{
     let verbose = 0;
     let window = WINDOW_25MS;
     let sampleRate = 22050; // default
@@ -42,77 +42,13 @@
     let tauMin = TAU_MIN;
     let tauMax = TAU_MAX;
     let minSamples = window + tauMax;
-    let tSample = 0;
-    let rFun = YinPitch.yinEA1;
+    let tSample = minSamples/2;
     let diffMax = 0.1; // acceptable ACF difference
     let yp = new YinPitch();
 
     should(yp).properties({ 
       window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples, tSample,
     });
-  });
-  it("yinE1 ctor()", ()=>{
-    let verbose = 0;
-    let window = WINDOW_25MS;
-    let sampleRate = 22050; // default
-    let fMin = FMIN;
-    let fMax = FMAX;
-    let tauMin = TAU_MIN;
-    let tauMax = TAU_MAX;
-    let minSamples = window + tauMax;
-    let rFun = YinPitch.yinE1;
-    let diffMax = 0.1; // acceptable ACF difference
-    let yp = new YinPitch({rFun});
-
-    should(yp).properties({ window, sampleRate, fMin, fMax, diffMax, tauMin, tauMax, minSamples});
-  });
-  it("yinE1()", ()=>{
-    let verbose = 0;
-    let nSamples = 100;
-    let frequency = 700;
-    let rFun = YinPitch.yinE1;
-    let samples = Signal.sineWave({frequency, nSamples});
-    let ypa = [
-      new YinPitch({window: 8, rFun}),
-      new YinPitch({window: 9, rFun}),
-      new YinPitch({window: 10, rFun}),
-      new YinPitch({window: 11, rFun}),
-      new YinPitch({window: 12, rFun}),
-    ];
-    let t = 0; // pitch at time t
-    let acva = ypa.map(yp=>{
-      let w = yp.window;
-      return zeros(nSamples-w).map((v,tau)=>rFun(samples, t,tau, w))
-    });
-    let stats = acva.map(acv=>Signal.stats(acv));
-    verbose && (new Chart({title:`yinE1 t:${t}`, data:acva})).plot();
-
-    // peaks depend on window size
-    should.deepEqual(stats.map(s=>s.iMax), [ 66, 34, 2, 33, 64, ]);
-  });
-  it("yinEA1()", ()=>{
-    let verbose = 0;
-    let nSamples = 100;
-    let frequency = 700;
-    let samples = Signal.sineWave({frequency, nSamples});
-    let rFun = YinPitch.yinEA1;
-    let ypa = [
-      new YinPitch({window: 8, rFun}),
-      new YinPitch({window: 9, rFun}),
-      new YinPitch({window: 10, rFun}),
-      new YinPitch({window: 11, rFun}),
-      new YinPitch({window: 12, rFun}),
-    ];
-    let t = Math.floor((nSamples-1)/2); // pitch at time t
-    let acva = ypa.map(yp=>{
-      let w = yp.window;
-      return zeros(nSamples-w).map((v,tau)=>rFun(samples, t,tau, w))
-    });
-    let stats = acva.map(acv=>Signal.stats(acv));
-    verbose && (new Chart({title:`yinEA1 t:${t}`, data:acva})).plot();
-
-    // peaks depend on window size
-    should.deepEqual(stats.map(s=>s.iMax), [ 63, 0, 63, 0, 63 ]);
   });
   it("autoCorrelate()", ()=>{
     let verbose = 0;
@@ -142,16 +78,17 @@
     let frequency = SAMPLE_RATE / Q;
     let phase = Math.PI/3; // arbitrary phase
     let samples = Signal.sineWave({frequency, nSamples, phase});
+    let tSample = 0;
     let ypa = [
-      new YinPitch({samples, window: 8}),
-      new YinPitch({samples, window: 9}),
-      new YinPitch({samples, window: 10}),
-      new YinPitch({samples, window: 11}),
-      new YinPitch({samples, window: 12}),
+      new YinPitch({tSample, samples, window: 8}),
+      new YinPitch({tSample, samples, window: 9}),
+      new YinPitch({tSample, samples, window: 10}),
+      new YinPitch({tSample, samples, window: 11}),
+      new YinPitch({tSample, samples, window: 12}),
     ];
     let t = 0; // pitch at time t
     let da = ypa.map(yp=>zeros(nSamples-yp.window)
-      .map((v,tau)=>yp.acfDifference(samples, t,tau)));
+      .map((v,tau)=>yp.acfDifference(samples, tau)));
     let daz = da.map(d=>
       d.reduce(((a,v,i) => a==null || (d[i] < d[a]) ? (i || undefined) : a),undefined)
     );
@@ -172,56 +109,16 @@
     let xInterp = YinPitch.interpolateParabolic(x,y);
     should(xInterp).equal(xMin);
   });
-  it("TESTTESTpitch() yinE1 vs yinEA1", ()=>{
-    return; // TODO
-    let verbose = 1;
-    let frequency = 200 + 10*Math.random();
-    verbose && (frequency = 203.3714002714288); // throws
-    let dFreq = 0;
-    let frequency1 = frequency+dFreq;
-    let frequency2 = frequency-dFreq;
-    let phase = Math.random()*2*Math.PI; 
-    let rFun = YinPitch.yinEA1;
-    let hr = new Resonator({frequency:frequency1});
-    let yp = new YinPitch({rFun});
-    let nSamples = yp.minSamples;
-    let samples = hr.oscillate({ frequency:frequency2, nSamples, tween:1});
-    let { tauMin, tauMax, window } = yp;
-    verbose && console.log({tauMin, tauMax, nSamples});
-    try {
-      let ypRes = yp.pitch(samples);
-      verbose && console.log(`ypRes`, JSON.stringify(ypRes));
-      let { pitch, pitchEst, tau, tauEst, acf, tSample, } = ypRes;
-      let title=`LEGEND: 1:samples, 2:ACFdifference`;
-      let xInterval = 4;
-      verbose && (new Chart({title:'samples',data:[samples],xInterval,lines:5})).plot();
-      //verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval})).plot();
-      let error = Math.abs(pitch-frequency);
-      verbose && console.log(`YIN`, {
-        frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
-        window: yp.window,
-        tauMin: yp.tauMin,
-        tauMax: yp.tauMax,
-      });
-      should(pitch).above(0, `could not detect pitch for phase:${phase}`);
-      should(error).below(0.33); // error rate goes down as sustain approaches 1
-      should(tSample).equal(Math.floor(nSamples/2));
-    } catch(e) {
-      console.warn(`[ERROR] ${e.message}`, { frequency, });
-      throw e;
-    }
-  });
   it("pitch() sin FREQ_MAN", ()=>{
     let verbose = 0;
     let frequency = FREQ_MAN;
     let phase = Math.random()*2*Math.PI; 
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let nSamples = yp.minSamples;
     let sustain = 0.999;
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let { pitch, pitchEst, tau, tauEst, acf, tSample, equation } = yp.pitch(samples);
-    should(tSample).equal(0);
+    should(tSample).equal(nSamples/2);
     let title=`LEGEND: 1:samples, 2:ACFdifference`;
     let xInterval = 4;
     verbose && (new Chart({title:'samples',data:[samples],xInterval})).plot();
@@ -242,8 +139,7 @@
     let phase = Math.random()*2*Math.PI; 
     verbose && (phase = 3.602657466317041);
     let sustain = 0.999;
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let nSamples = yp.minSamples;
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
@@ -262,15 +158,14 @@
     should(error).below(0.21); // error rate decreases with frequency
     verbose && should(pitch).equal(169.97871589219946);
   });
-  it("TESTTESTpitch() sin FREQ_ADULT (EA1)", ()=>{
+  it("pitch() sin FREQ_ADULT (EA1)", ()=>{
     let verbose = 0;
     let frequency = FREQ_ADULT;
     let phase = Math.random()*2*Math.PI; 
     verbose && (phase = 3.602657466317041);
     let sustain = 0.999;
-    let rFun = YinPitch.yinE1;
     let tSample = 420;
-    let yp = new YinPitch({rFun, tSample});
+    let yp = new YinPitch({tSample});
     let nSamples = yp.minSamples; 
     should(nSamples).equal(840);
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
@@ -288,15 +183,14 @@
     });
     should(pitch).above(0, `could not detect pitch for phase:${phase}`);
     should(error).below(0.21); // error rate decreases with frequency
-    verbose && should(pitch).equal(170.16646563135347);
+    verbose && should(pitch).equal(170.16646563135347); // different than E1
   });
   it("pitch() sin FREQ_WOMAN", ()=>{
     let verbose = 0;
     let frequency = FREQ_WOMAN;
     let phase = Math.random()*2*Math.PI; 
     let sustain = 0.999;
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let nSamples = yp.minSamples;
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain });
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
@@ -319,8 +213,7 @@
     let sustain = 0.999;
     let type = Int16Array;
     let scale = 16384;
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let nSamples = yp.minSamples;
     let samples = Signal.sineWave({ frequency, nSamples, phase, sustain, scale, type });
     let { pitch, pitchEst, acf, tau, tauEst, } = yp.pitch(samples);
@@ -414,8 +307,7 @@
         : samples.map((v,i) => v + a[i]);
     }, null);
 
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let chart = new Chart();
     let data = [...harmonicsIn.map(h=>h.samples), samples];
     verbose && chart.plot({data, xInterval:2});
@@ -449,8 +341,7 @@
     let ferr = path.join(__dirname, 'data/yin-pitch-err1.json');
     let error = JSON.parse(await fs.promises.readFile(ferr));
     let { samples } = error;
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let chart = new Chart({lines: 7});
     verbose && chart.plot({data:samples});
     let resPitch = yp.pitch(samples);
@@ -462,8 +353,7 @@
     let ferr = path.join(__dirname, 'data/yin-pitch-err2.json');
     let error = JSON.parse(await fs.promises.readFile(ferr));
     let { samples } = error;
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
+    let yp = new YinPitch();
     let chart = new Chart({lines: 7});
     verbose && chart.plot({data:samples});
     let ypRes = yp.harmonics(samples);

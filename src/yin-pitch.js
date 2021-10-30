@@ -27,11 +27,10 @@
         diffMax = 0.1,
         fMax = FMAX,
         fMin = FMIN,
-        rFun = YinPitch.yinEA1,
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
         sampleRate = 22050,
-        tSample = 0,
+        tSample,
         window = WINDOW_25MS,
       } = args;
       assert(Number.isInteger(window) && 0<window, 
@@ -45,42 +44,13 @@
         fMin,
         minAmplitude,
         maxAmplitude,
-        rFun,
         sampleRate,
         tauMax,
         tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
-        tSample,
         window,
       });
-    }
 
-    // Equation (1) with window left-aligned to time (i.e., t=0)
-    static yinE1(samples, t1, tau, w) {  
-      let sum = 0;
-      for (let i = t1; i < t1+w; i++) {
-        sum += samples[i] * samples[i+tau];
-      }
-      return sum;
-    }
-
-    // Equation (A1) with window centered on time (i.e., t≈window/2)
-    static yinEA1(samples, t, tau, w) {
-      let sum = 0;
-      let nSamples = samples.length;
-      let iStart = Math.round(t - tau/2 - w/2);
-      let iEnd = iStart + w - 1;
-      //console.log(`yinEA1`, iEnd-iStart);
-      assert(0<=iStart && iStart<nSamples,
-        `[E_EA1_START] yinEA1 bounds violation:\n`+
-        JSON.stringify({iStart, iEnd, t, tau, nSamples}));
-      assert(0<=iEnd && iEnd<nSamples, 
-        `[E_EA1_END] yinEA1 bounds violation:\n`+
-        JSON.stringify({iStart, iEnd, t, tau, nSamples, w}));
-
-      for (let i = iStart; i <= iEnd; i++) {
-        sum += samples[i] * samples[i+tau];
-      }
-      return sum;
+      this.tSample = tSample == null ? Math.round(this.minSamples/2) : tSample;
     }
 
     static interpolateParabolic(x,y) {
@@ -98,12 +68,8 @@
     }
 
     get minSamples() {
-      let { rFun, window, tauMax, tauMin, tSample, } = this;
+      let { window, tauMax, } = this;
       return tauMax + window;
-      if (rFun === YinPitch.yinE1) {
-        return tauMax + window + 1;
-      }
-      return 2*tauMax - tauMin + window;
     }
 
     autoCorrelate(samples, t1, tau, w=this.window) {
@@ -114,13 +80,14 @@
       return sum;
     }
 
-    acfDifference(samples, t1, tau) {
+    acfDifference(samples, tau) {
+      let { window, tauMax, tSample } = this;
+      let t1 = tSample ? Math.round(tSample - tau/2 - window/2) : 0;
+      let tw = t1 + window -1;
+      let nSamples = samples.length;
       try {
-        let { window, tauMax, tSample } = this;
-        let nSamples = samples.length;
-        let tw = t1 + window -1;
         assert(0 <= t1, `[E_T1_LOW]`);
-        assert(tw < nSamples, `[E_T1_HIGH`);
+        assert(tw < nSamples, `[E_T1_HIGH]`);
 
         let acft0 = this.autoCorrelate(samples, t1, 0, window);
         let acftau0 = this.autoCorrelate(samples, t1+tau, 0, window); 
@@ -129,7 +96,8 @@
         assert(!isNaN(v), `[E_NAN_ACFDIFF] t1:${t1} tau:${tau}`);
         return v;
       } catch(e) {
-        console.warn(`Error: ${e.message}`, JSON.stringify({t1, tau, window, tauMax, tSample}));
+        console.warn(`Error: ${e.message}`, 
+          JSON.stringify({t1, tw, nSamples, tau, window, tauMax, tSample}));
         throw e;
       }
     }
@@ -148,8 +116,7 @@
 
       let tauEst = undefined;
       for (let tau = tauMin; ; tau++) {
-        let t1 = tSample ? Math.round(tSample - tau/2 - window/2) : 0;
-        let v = this.acfDifference(samples, t1, tau, window);
+        let v = this.acfDifference(samples, tau, window);
         acf.push(v);
         if (tau >= tauMax) {
           break;
