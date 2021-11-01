@@ -147,29 +147,44 @@
       return result;
     }
 
-    phaseAmplitude({samples, frequency}) {
-      let { sampleRate } = this;
+    phaseAmplitude({samples, frequency, verbose}) {
+      let { sampleRate, tSample } = this;
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
       assert(!isNaN(frequency) && 0 < frequency, `[E_FREQUENCY] must be positive number:${frequency}`);
       let samplesPerCycle = sampleRate/frequency;
-      let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
-      assert(0<nSamples, `[E_SAMPLES_LENGTH] minimum:${samplesPerCycle} actual:${samples.length}`);
-      let cosine = Signal.sineWave({frequency, nSamples, phase:Math.PI/2});
-      let sine = Signal.sineWave({frequency, nSamples});
+      let minCycleSamples = Math.round(samplesPerCycle);
+      let maxCycles = Math.floor(samples.length/samplesPerCycle);
+      let maxCycleSamples = Math.round(samplesPerCycle * maxCycles);
+
+      // If the signal is sustained, then a longer sample is better
+      // If the signal is changing, then a shorter sample is better
+      let cycleSamples = maxCycleSamples; 
+
+      assert(0<cycleSamples, `[E_SAMPLES_LENGTH] minimum:${cycleSamples} actual:${samples.length}`);
+      let tStart = -tSample;
+      let nSamples = samples.length;
+      let cosine = Signal.sineWave({frequency, nSamples, phase:Math.PI/2, tStart});
+      let sine = Signal.sineWave({frequency, nSamples, tStart});
       let real = 0;
       let imaginary = 0;
-      for (let t = 0; t < nSamples; t++) {
+      let t1 = Math.max(0,Math.round(tSample-cycleSamples/2));
+      let tEnd = Math.min(Math.round(t1+cycleSamples), samples.length);
+      verbose && console.log(`phaseAmplitude`, {
+        tStart, t1, tEnd, nSamples, samplesPerCycle, cycleSamples, minCycleSamples, 
+        //maxCycles, maxCycleSamples,
+        slength:samples.length, tSample});
+      for (let t = 0; t < tEnd; t++) {
         let st = samples[t];
         real += st * cosine[t];
         imaginary += st * sine[t];
       }
-      let amplitude = 2*Math.sqrt(real*real + imaginary*imaginary)/nSamples;
+      let amplitude = Math.sqrt(real*real + imaginary*imaginary)/cycleSamples;
       let chart = new Chart();
-      0 && chart.plot({data:[samples, cosine, sine]});
       let phase = Math.atan2(-imaginary, real) + Math.PI/2;
       if (Math.PI <= phase) { phase -= 2*Math.PI; }
-      return { phase, amplitude, phasor:{real, imaginary}, nSamples, samplesPerCycle, }
+      else if (phase <= -Math.PI) { phase += 2*Math.PI; }
+      return { phase, amplitude, phasor:{real, imaginary}, cycleSamples, t1, tEnd, samplesPerCycle, }
     }
 
     harmonics(samples, opts={}) {

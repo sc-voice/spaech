@@ -15,18 +15,13 @@
         title='Chart',
         lineLength=95,
         xInterval=1,
+        yAxis=0,
       } = args;
 
       assert(dataset instanceof Array, `[E_CHART_DATASET] expected array of numbers for dataset`);
 
-      Object.assign(this, { 
-        dataset,
-        lines,
-        precision,
-        xTicks,
-        yTicks,
-        title, lineLength, xInterval,
-      });
+      Object.assign(this, { dataset, lines, precision, xTicks, yTicks,
+        yAxis, title, lineLength, xInterval, });
     }
 
     stats(dataset=[]) {
@@ -48,7 +43,7 @@
       return stats;
     }
 
-    plotRow({output,min,max,range}) {
+    plotRow({output,min,max,range, yAxis}) {
       let { lines, precision, yTicks, xTicks, xTicks2 } = this;
       let labelSize = 1+Math.max(
         min.toFixed(precision).length, 
@@ -64,13 +59,23 @@
             let yTick = ix1 % xTicks 
               ? (ix1 % 5 ? '.' : ',')
               : ':';
+            let c = '#';
             switch(v) {
-              case 0: return iy === iy0 
-                ? (ix1 % xTicks ? (ix1 % 5 ? '-' : '+') : xTick)
-                : ((iy-iy0) % yTicks ? ' ' : yTick);
-              case OVERLAP: return '*';
-              default: return v;
+              case 0:
+                if (iy === iy0) { // x-axis
+                  c = (ix1 % xTicks ? (ix1 % 5 ? '-' : '+') : xTick)
+                } else {
+                  c = ((iy-iy0) % yTicks 
+                    ? (ix === yAxis ? '|' : ' ')
+                    : yTick);
+                }
+                break;
+              case OVERLAP: c = '*';
+                break;
+              default: c = v;
+                break;
             }
+            return c;
           });
         let label = yOfLine(iy).toExponential(precision);
         while (label.length < labelSize) { label = ' '+label}
@@ -88,7 +93,9 @@
         lineLength = this.lineLength,
         precision = this.precision,
         transpose = false,
+        yAxis = this.yAxis,
       } = args;
+      yAxis = Math.round(yAxis/xInterval);
       if (!Array.isArray(dataset[0]) && !ArrayBuffer.isView(dataset[0])) {
         dataset = [dataset];
       }
@@ -110,7 +117,7 @@
       for (let i=0; i < width; i+=lineLength) {
         i && console.log();
         let outRow = output.map(ds=>ds.slice(i, i+lineLength));
-        this.plotRow({output:outRow, min, max, range});
+        this.plotRow({output:outRow, min, max, range, yAxis:yAxis-i});
       }
       if (title) {
         console.log(title);

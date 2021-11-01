@@ -31,23 +31,23 @@
         type=Array,
       } = args;
 
-      assert(0<=tStart && Number.isInteger(tStart), 
+      assert(Number.isInteger(tStart), 
         `[E_TSTART] expected non-negative integer:${tStart}`);
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
          : new type(nSamples);
       let level = scale * sustain;
       let k = 2*Math.PI*frequency/sampleRate;
-      let tPhase = k*tStart+phase;
+      let tPhase = k*tStart;
       if (type === Int16Array || type === Int32Array || type === BigInt64Array) {
         for (let t = 0; t < nSamples; t++) {
-          let v = level * Math.sin(k*t+tPhase);
+          let v = level * Math.sin(k*(t+tStart)+phase);
           samples[t] = Math.round(v); // TypedArrays use floor()
           level *= sustain;
         }
       } else {
         for (let t = 0; t < nSamples; t++) {
-          let v = level * Math.sin(k*t+tPhase);
+          let v = level * Math.sin(k*(t+tStart)+phase);
           samples[t] = v;
           level *= sustain;
         }

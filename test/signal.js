@@ -80,6 +80,23 @@
     should(s6 instanceof type);
     should.deepEqual([...s6], sine.map(v=>Math.round(scale*v/10)));
   });
+  it("sineWave() tStart", ()=>{
+    let verbose = 0;
+    let frequency = 411;
+    let nSamples = 180;
+    let phase = Math.PI/2;
+    let sampleRate = 22050;
+    let scale = 10;
+    let offset = Math.round(Math.random()*80);
+    let tStart = -offset;
+    let s1 = Signal.sineWave({frequency, nSamples, phase, scale, sampleRate, });
+    let s2 = Signal.sineWave({frequency, nSamples, phase, scale, sampleRate, tStart}).slice(offset);
+    let title = `sineWave() *:s1===s2 1:s1 offset:${offset}`;
+    let chart = new Chart({lines:7});
+    let s2Expected = s1.slice(0, s1.length-offset);
+    verbose && chart.plot({title, data:[s1,s2,s2Expected]});
+    should.deepEqual(s2,s2Expected);
+  });
   it("stats() => stats", async()=>{
     let dataOdd = [1, 2, 3, 5, 4];
     should.deepEqual(Signal.stats(dataOdd), {
