@@ -256,53 +256,49 @@
     should(error).below(0.08); // error rate decreases with frequency
   });
   it("TESTTESTphaseAmplitude() sin 140Hz", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let scale = 10000;
     let sampleRate = 22050;
     let frequency = 140; // not a factor of sampleRate
-    let nCycles = 2.5;
+    let nCycles = 2.3; // not a multiple of cycles
     let samplesPerCycle = sampleRate/frequency;
     let nSamples = Math.round(samplesPerCycle*nCycles);
     let tSample = Math.round(nSamples/2);
     let yp = new YinPitch({tSample});
     let tStart = -tSample;
-    let chart = new Chart({xInterval:1,lines:15});
-    let n = 50; // test 50 samples from [0, 2*Math.PI]
-    let phase = 0;
-    let samples = Signal.sineWave({ frequency, nSamples, phase, scale, sampleRate, tStart });
-    let pa = yp.phaseAmplitude({samples, frequency, });
-    let phaseError = Math.abs(phase - pa.phase);
-    let amplitudeError = Math.abs(scale - pa.amplitude);
     let precision = 4;
-    let title = `samples phase:0 tSample:${tSample}\n`;
-    verbose && chart.plot({title, data:[samples], xInterval:5, yAxis:tSample});
-
+    let n = 90; // test n samples from [0, 2*Math.PI]
     let data = new Array(n).fill(0).map((v,i)=>{
-      phase = i*2*Math.PI / n;
-      samples = Signal.sineWave({ frequency, nSamples, phase, scale, sampleRate, tStart });
-      pa = yp.phaseAmplitude({samples, frequency, });
+      let phase = i*2*Math.PI / n;
+      let samples = Signal.sineWave({ frequency, nSamples, phase, scale, sampleRate, tStart });
+      let pa = yp.phaseAmplitude({samples, frequency, verbose: i===2 && verbose });
       let phaseError = Math.abs(phase - pa.phase);
       if (Math.PI<phaseError) { phaseError = Math.abs(phaseError - 2*Math.PI); }
-      //should(phaseError).below(7.1e-2, [
-      should(phaseError).below(9.1e-2, [
-        `phaseError:${phaseError.toFixed(precision)}`,
-        `i:${i}`,
-        `phase expected:${phase.toFixed(precision)} actual:${pa.phase.toFixed(precision)}`,
-      ].join(' '));
-      let amplitudeError = Math.abs(scale - pa.amplitude);
-      0 && should(amplitudeError).below(7.1e-2, [
-        `amplitudeError:${amplitudeError}`,
-        JSON.stringify(pa),
-      ].join(' '));
-      return { phase, phaseError, amplitudeError, pa }
+      let amplitudeError = Math.abs(scale - pa.amplitude)/scale;
+      if (verbose && i === 14) {
+        let xInterval = 4;
+        let chart = new Chart({xInterval,lines:9});
+        title = `1:signal xInterval:${xInterval} i:${i} phase:${phase.toFixed(3)}`;
+        chart.plot({title, data:[samples], yAxis:tSample });
+      }
+      return { i, phase, phaseError, amplitudeError, pa }
     });
+    let chart = new Chart({xInterval:1,lines:9});
+
     let phaseErrors = data.map(v=>v.phaseError);
+    title = `x:phase[0, 2*Math.PI] 1:phaseError`;
+    verbose && chart.plot({title, data:[phaseErrors]});
+    let statsPhase = Signal.stats(phaseErrors);
+    should(statsPhase.max).below(1e-15);
+
     let amplitudeErrors = data.map(v=>v.amplitudeError);
-    title = `x:phase[0, 2*Math.PI] 1:phaseError 2:amplitudeError`;
-    verbose && chart.plot({title, data:[phaseErrors, amplitudeErrors]});
-    return;
+    title = `x:phase[0, 2*Math.PI] 1:amplitudeError`;
+    verbose && chart.plot({title, data:[amplitudeErrors]});
+    let statsAmplitude = Signal.stats(amplitudeErrors);
+    should(statsAmplitude.max).below(2e-15);
   });
-  it("TESTTESTharmonics() detects f0,f1,...", ()=>{
+  it("harmonics() detects f0,f1,...", ()=>{
+    return; // TODO
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;

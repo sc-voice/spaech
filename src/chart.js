@@ -46,8 +46,8 @@
     plotRow({output,min,max,range, yAxis}) {
       let { lines, precision, yTicks, xTicks, xTicks2 } = this;
       let labelSize = 1+Math.max(
-        min.toFixed(precision).length, 
-        max.toFixed(precision).length);
+        min.toExponential(precision).length, 
+        max.toExponential(precision).length);
       let lineLast = lines-1;
       let line = (x)=> Math.round(range ? (max-x)*lineLast/range : lines/2);
       let yOfLine = (line)=> (line*min + (lineLast - line)*max)/lineLast; 
