@@ -31,6 +31,7 @@
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
         sampleRate = 22050,
+        pitchPrecision = 1,                     // MP3 digitization assumption
         tSample,
         window = WINDOW_25MS,
       } = args;
@@ -45,6 +46,7 @@
         fMin,
         minAmplitude,
         maxAmplitude,
+        pitchPrecision,
         sampleRate,
         tauMax,
         tauMin: Math.round(sampleRate/fMax)-1, // allow for interpolation
@@ -105,7 +107,7 @@
 
     pitch(samples) {
       let { 
-        minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax, tSample,
+        minSamples, window, tauMin, tauMax, sampleRate, diffMax, fMin, fMax, tSample, pitchPrecision,
       } = this;
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
@@ -138,6 +140,7 @@
       let tau = YinPitch.interpolateParabolic(x,y);
       if (tau > 0) {
         let pitch = sampleRate / tau;
+        pitch = Number(pitch.toFixed(pitchPrecision));
         if (fMin <= pitch && pitch <= fMax) {
           result.tau = tau;
           result.tauEst = tauEst;
@@ -149,7 +152,7 @@
     }
 
     phaseAmplitude({samples, frequency, verbose}) {
-      let { sampleRate, tSample } = this;
+      let { sampleRate, tSample, } = this;
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
       assert(!isNaN(frequency) && 0 < frequency, `[E_FREQUENCY] must be positive number:${frequency}`);
