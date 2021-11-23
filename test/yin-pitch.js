@@ -255,7 +255,7 @@
       window: yp.window, tauMin: yp.tauMin, tauMax: yp.tauMax, });
     should(error).below(0.08); // error rate decreases with frequency
   });
-  it("TESTTESTphaseAmplitude() sin 140Hz", ()=>{
+  it("phaseAmplitude() sin 140Hz", ()=>{
     let verbose = 0;
     let scale = 10000;
     let sampleRate = 22050;
@@ -298,14 +298,16 @@
     should(statsAmplitude.max).below(2e-15);
   });
   it("harmonics() detects f0,f1,...", ()=>{
-    return; // TODO
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
     let nSamples = MIN_SAMPLES;
     let f0 = 140;
-    let scale0 = 16384;
+    let scale0 = 10000;
     let phase = -Math.random()*Math.PI;
+    verbose && (phase = -2.1709991808003526);
+    let tSample = nSamples/2;
+    tSample = 0;
     let harmonicsIn = [
       { frequency: f0, phase: phase, scale: scale0 * 1, },
       { frequency: 2*f0, phase: phase + 0.2*Math.PI, scale: scale0 * 0.5, },
@@ -313,9 +315,9 @@
     ];
     harmonicsIn.forEach(harmonic=>{
       let {frequency, scale, phase} = harmonic;
-      harmonic.samples = Signal.sineWave({
-        frequency, nSamples, phase, scale, sampleRate
-      });
+      Object.defineProperty(harmonic, 'samples', { // non-enumerable
+        value: Signal.sineWave({frequency, nSamples, phase, scale, sampleRate, tStart:-tSample,
+      })});
       harmonic.samplesPerCycle = sampleRate/frequency;
     });
     let samples = harmonicsIn.reduce((a,harmonic)=>{
@@ -325,15 +327,14 @@
         : samples.map((v,i) => v + a[i]);
     }, null);
 
-    let tSample = 0; // TODO: mid-samples harmonics
     let yp = new YinPitch({tSample});
-    let chart = new Chart();
-    let data = [...harmonicsIn.map(h=>h.samples), samples];
-    verbose && chart.plot({data, xInterval:2});
+    let chart = new Chart({lines:7});
+    verbose && chart.plot({title:`samples`, data:samples, xInterval:5, yAxis:tSample});
+    verbose && chart.plot({title:`h1`, data:samples, xInterval:5, yAxis:tSample});
 
     let nHarmonics = harmonicsIn.length;
     let minAmplitude = scale0 * 0.003;
-    let harmonicsOut = yp.harmonics(samples, {nHarmonics, minAmplitude});
+    let harmonicsOut = yp.harmonics(samples, {nHarmonics, minAmplitude, verbose});
     verbose && harmonicsOut.forEach(h=>console.log(`harmonicsOut`, JSON.stringify(h)));
     should(harmonicsOut.length).equal(3);
     harmonicsIn.forEach((hIn,i)=>{
@@ -344,13 +345,13 @@
         if (scale) {
           let dPhase = Math.abs(phase - hOut.phase);
           let dAmplitude = Math.abs(scale - hOut.amplitude);
-          should(dPhase).below(2.6e-1); // eg., phase = -1.8254097836389889 
-          should(dAmplitude/scale0).below(2);
+          should(dPhase).below(2e-1); 
+          should(dAmplitude/scale).below(6e-2);
         } else {
           should(hOut).equal(undefined);
         }
       } catch(e) {
-        console.error(`ERROR`, hOut, e.message);
+        console.error(`ERROR`, {hIn, hOut}, e.message);
         throw e;
       }
     });

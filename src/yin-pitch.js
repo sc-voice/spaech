@@ -23,6 +23,7 @@
 
   class YinPitch {
     constructor(args={}) {
+      logger.logInstance(this);
       let {
         diffMax = 0.1,
         fMax = FMAX,
@@ -155,7 +156,7 @@
       let samplesPerCycle = sampleRate/frequency;
 
       // If possible, sample two cycles for best accuracy (i.e. accuracy 1e-15 vs 4e-3)
-      let nCycles = Math.min(2,Math.floor(samples.length/samplesPerCycle)); 
+      let nCycles = Math.floor(samples.length/samplesPerCycle); 
       let cycleSamples = Math.round(samplesPerCycle * nCycles);
       assert(0<cycleSamples, `[E_SAMPLES_LENGTH] minimum:${cycleSamples} actual:${samples.length}`);
 
@@ -189,19 +190,21 @@
         sampleRate = this.sampleRate,
         minAmplitude = this.minAmplitude,
         maxAmplitude = this.maxAmplitude,
+        verbose,
       } = opts;
-      let { pitch:f0 } = this.pitch(samples);
-      let noHarmonic = { frequency:0, amplitude:0, phase:0 };
+      let f0Pitch = this.pitch(samples);
+      let { pitch:f0, } = f0Pitch;
       let harmonics = [];
       if (f0) {
         let samplesPerCycle = sampleRate/f0;
-        let nSamples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
-        let f0Samples = samples.slice(0, nSamples); // Discard partial cycles
+        let f0Samples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
         for (let i=0; i < nHarmonics; i++) {
           let frequency = (i+1)*f0;
-          let pa = this.phaseAmplitude({samples:f0Samples, frequency});
+          let pa = this.phaseAmplitude({samples, frequency});
           if (minAmplitude < pa.amplitude) {
             harmonics.push({ frequency, phase:pa.phase, amplitude:pa.amplitude, order:i});
+          } else {
+            verbose && console.log(`harmonics rejected`, {frequency, minAmplitude, pa, f0Samples});
           }
         }
       }

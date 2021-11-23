@@ -10,7 +10,7 @@
         sampleRate = 22050, // Common sample rate for speech MP3
         frequency = 200,    // Median adult woman speech frequency
         phase = 0,          // phase at t=0
-        r=0.995,            // pole radius [0,1]
+        r=0.995,            // ZIR exponential decay
         y1=this.y1,         // output at t-1
         y2=this.y2,         // output at t-2
         x1=this.x1,         // input at t-1
@@ -45,6 +45,8 @@
 
     step(x0) {
       // https://www.music.mcgill.ca/~gary/307/week10/node4.html
+      // See also Adam Panagos Zero-Input Response Theory complex roots
+      // https://www.youtube.com/watch?v=dFBvmqj8D7E&t=172s
       let { y1, y2, x1, x2, r, frequency, samplePeriod } = this;
       let a1 = -2 * r * Math.cos(2*Math.PI*frequency*samplePeriod);
       let r2 = r * r;

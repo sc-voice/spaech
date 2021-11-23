@@ -14,6 +14,7 @@
     0.2370803777154975,
     0.2947551744109042,
   ];
+  this.timeout(10*1000);
 
   it("default ctor", ()=>{
     let resonator = new Resonator();
@@ -143,6 +144,56 @@
     verbose && console.log({pitch1, pitch2});
     should(Math.round(pitch2)).above(f1).below(pitch1);
     should(Math.round(pitch1)).equal(f2);
+  });
+  it("TESTTESTlinear recurrence", ()=>{
+    let verbose = 0;
+    let fs = 22050;
+    fs = 1*94;
+    let N = 94;
+    N = fs;
+    let xInterval = Math.floor(fs/94);
+    let fVoice = 800;
+    fVoice = fs/2;
+    let beta = 2*Math.PI*fVoice/fs;
+    let phase = 2*Math.PI * Math.random();
+    phase = 0; // TODO
+    let amplitude = 100;
+    let chart = new Chart({lines:29});
+    let halfLife = N/4;
+    let gamma = Math.pow(0.5, 1/halfLife);
+    verbose && console.log({gamma})
+    let a1 = -2 * gamma * Math.cos(beta);
+    let a0 = gamma * gamma;
+    let y0 = amplitude * Math.cos(phase);
+    let y1 = amplitude * gamma * Math.cos(beta + phase);
+    let yk0 = y0;
+    let yk1 = y1;
+    let samples = new Array(N).fill(0).map((v,i) => {
+      if (i === 0) { return y0 };
+      if (i === 1) { return y1 };
+      let yk2 =  - a1 * yk1 - a0 * yk0;
+      yk0 = yk1;
+      yk1 = yk2;
+      return yk2;
+    });
+    verbose && console.log({a1,a0,y1,y0, decay:Math.pow(gamma, N), halfLife});
+    verbose && chart.plot({data:samples, xInterval});
+  });
+  it("TESTTESTcos identity", ()=>{
+    let pi2 = Math.PI * 2;
+    for (let i = 0; i < 100; i++) {
+      let x = pi2*Math.random();
+      let y = pi2*Math.random();
+      let v1 = Math.cos(y)*Math.cos(x -y);
+      let v2 = 0.5*(Math.cos(x)+Math.cos(x - 2*y));
+      let v12 = v1 - v2;
+      try {
+        should(Math.abs(v12)).below(8e-16);
+      } catch(e) {
+        console.log({x,y,v1,v2,v12 });
+        throw e;
+      }
+    }
   });
 
 })
