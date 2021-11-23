@@ -16,19 +16,43 @@
   ];
   this.timeout(10*1000);
 
-  it("default ctor", ()=>{
+  it("TESTTESTdefault ctor", ()=>{
     let resonator = new Resonator();
+    let halfLifeSamples = 96;
+    let r = Math.pow(0.5, 1/halfLifeSamples);
     should(resonator).properties({
       sampleRate: 22050,
       frequency: 200,
-      r: 0.995,
+      r,
       t: 0,
+      halfLifeSamples,
       x1: 0,
       x2: 0,
       y1: 0,
       y2: 0,
       scale: 1,
     });
+  });
+  it("TESTTESTcustom ctor", ()=>{
+    let sampleRate = 22000;
+    let halfLifeSamples = 48;
+    let x1 = 1;
+    let x2 = 2;
+    let y1 = 3;
+    let y2 = 4;
+    let scale = 5;
+    let t = 1;
+    let frequency = 100;
+    let r = Math.pow(0.5, 1/halfLifeSamples);
+
+    let resonator = new Resonator({t, frequency, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale});
+    should(resonator).properties({ 
+      frequency, t, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale, r });
+
+    let resonator2 = new Resonator({t, frequency, sampleRate, r, x1, x2, y1, y2, scale});
+    halfLifeSamples = Math.log(0.5) / Math.log(r);
+    should(resonator2).properties({ 
+      frequency, t, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale, r });
   });
   it("resonate() decays without input", ()=>{
     let verbose = 0;
@@ -86,8 +110,8 @@
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
     let stats = Signal.stats(s1);
-    should(stats.iMax).equal(358);
-    should(stats.max.toFixed(precision)).equal((0.8320586576302439).toFixed(precision));
+    should(stats.iMax).equal(357);
+    should(stats.max.toFixed(precision)).equal((0.9215343958).toFixed(precision));
   });
   it("resonate() changes frequency", ()=>{
     let verbose = 0;

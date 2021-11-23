@@ -7,21 +7,29 @@
     constructor(opts={}) {
       this.clear();
       let {
-        sampleRate = 22050, // Common sample rate for speech MP3
-        frequency = 200,    // Median adult woman speech frequency
-        phase = 0,          // phase at t=0
-        r=0.995,            // ZIR exponential decay
-        y1=this.y1,         // output at t-1
-        y2=this.y2,         // output at t-2
-        x1=this.x1,         // input at t-1
-        x2=this.x2,         // input at t-2
-        scale = 1,          /// peak amplitude
+        sampleRate = 22050,   // Common sample rate for speech MP3
+        frequency = 200,      // Median adult woman speech frequency
+        phase = 0,            // phase at t=0
+        r,                    // ZIR exponential decay
+        halfLifeSamples,
+        y1=this.y1,           // output at t-1
+        y2=this.y2,           // output at t-2
+        x1=this.x1,           // input at t-1
+        x2=this.x2,           // input at t-2
+        scale = 1,            // peak amplitude
         t=0,
         tween = false,
       } = opts;
+      assert(r == null || halfLifeSamples == null, `[E_HALFLIFESAMPLES_R] mutually exclusive`);
+      if (r == null) {
+        halfLifeSamples == null && (halfLifeSamples = 96);
+        r = Math.pow(0.5, 1/halfLifeSamples);
+      } else {
+        halfLifeSamples = Math.log(0.5) / Math.log(r);
+      }
       assert(1 < sampleRate, `[E_SAMPLERATE_NAN] expected positive number`);
       assert(0 < frequency, `[E_FREQUENCY_NAN] expected positive number`);
-      assert(Array.isArray(r) || !isNaN(r) && 0 <= r <= 1, `[E_R] expected r:${r} between [0,1]`);
+      assert(!isNaN(r) && 0 <= r <= 1, `[E_R] expected r:${r} between [0,1]`);
       assert(!isNaN(phase), `[E_PHASE_NAN] expected number:${phase}`);
       assert(!isNaN(x1), `[E_X1_NAN] expected number:${x1}`);
       assert(!isNaN(x2), `[E_X2_NAN] expected number:${x2}`);
@@ -31,7 +39,8 @@
       let samplePeriod = 1/sampleRate;
 
       Object.assign(this, { 
-        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, tween, phase,
+        r, frequency, sampleRate, samplePeriod, x1, x2, y1, y2, scale, t, tween, phase, 
+        halfLifeSamples,
       });
     }
 
