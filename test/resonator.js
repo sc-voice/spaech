@@ -54,24 +54,33 @@
     should(resonator2).properties({ 
       frequency, t, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale, r });
   });
-  it("resonate() decays without input", ()=>{
-    let verbose = 0;
-    let r1 = new Resonator();
-    let nSamples = 400;
+  it("TESTTESTresonate() decays without input", ()=>{
+    let verbose = 1;
+    let frequency = 800;
+    let halfLifeSamples = 8;
+    let r1 = new Resonator({frequency, halfLifeSamples});
+    let nSamples = 90;
 
     // resonate can be single-stepped with some degree of precision
-    let s1 = r1.resonate({nSamples});
-    let s2 = r1.resonate({nSamples, scale:0});
-    let chart = new Chart();
-    verbose && chart.plot({data:[s1,s2], xInterval:5});
-    let stats1b = Signal.stats(s1.slice(nSamples/2));
-    let stats2a = Signal.stats(s2.slice(0,nSamples/2));
-    let stats2b = Signal.stats(s2.slice(nSamples/2));
-    verbose && console.log({stats1b,stats2a,stats2b});
+    let s1 = r1.resonate({nSamples});           // steady-state amplitude
+    let s2 = r1.resonate({nSamples, scale:0});  // decline to zero
+    let chart = new Chart({xInterval:1,lines:11});
+    verbose && chart.plot({title:`s1`, data:s1});
+    verbose && chart.plot({title:`s2`, data:s2});
+    let stats = [
+      Signal.stats(s1.slice(0,nSamples/2)), // first half, increasing
+      Signal.stats(s1.slice(nSamples/2)),   // second half, steady state
+      Signal.stats(s2.slice(0,nSamples/2)), // first half, declining
+      Signal.stats(s2.slice(nSamples/2)),   // second half, steady state
+    ];
+    verbose && console.log(`stddev`, ...stats.map(v=>v.stdDev));
+    verbose && console.log(`max`, ...stats.map(v=>v.max));
 
     // resonate with no signal energy results in a decaying signal
-    should(stats2a.stdDev).above(stats1b.stdDev*0.7);   
-    should(stats2b.stdDev).below(stats2a.stdDev/2);
+    should(stats[0].stdDev).below(0.6);
+    should(stats[1].stdDev).above(0.7);
+    should(stats[2].stdDev).above(0.2);   
+    should(stats[3].stdDev).below(0.01);
   });
   it("oscillate()", ()=>{
     let verbose = 0;
