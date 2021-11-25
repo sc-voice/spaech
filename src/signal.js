@@ -56,6 +56,43 @@
       return samples;
     }
 
+    static cosineWave(args={}) {
+      let {
+        frequency, 
+        nSamples, 
+        phase=0, 
+        sampleRate=22050,
+        scale=1,
+        sustain=1,
+        tStart=0,
+        type=Array,
+      } = args;
+
+      assert(Number.isInteger(tStart), 
+        `[E_TSTART] expected non-negative integer:${tStart}`);
+      let samples = type === Array
+         ? [...new Int8Array(nSamples)]
+         : new type(nSamples);
+      let level = scale * sustain;
+      let k = 2*Math.PI*frequency/sampleRate;
+      let tPhase = k*tStart;
+      if (type === Int16Array || type === Int32Array || type === BigInt64Array) {
+        for (let t = 0; t < nSamples; t++) {
+          let v = level * Math.cos(k*(t+tStart)+phase);
+          samples[t] = Math.round(v); // TypedArrays use floor()
+          level *= sustain;
+        }
+      } else {
+        for (let t = 0; t < nSamples; t++) {
+          let v = level * Math.cos(k*(t+tStart)+phase);
+          samples[t] = v;
+          level *= sustain;
+        }
+      }
+
+      return samples;
+    }
+
     static fromWav(buf) {
       let wf = new WaveFile(buf);
       let data = wf.getSamples(false, Int16Array);

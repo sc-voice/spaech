@@ -52,12 +52,26 @@
       return Math.pow(0.5, 1/halfLifeSamples);
     }
 
+    get halfLifeSamples() {
+      return Resonator.halfLifeSamples(this.r);
+    }
+
+    set halfLifeSamples(value) {
+      this.r = Resonator.halfLifeDecay(value);
+    }
+
     clear() {
       this.y1 = 0;
       this.y2 = 0;
       this.x1 = 0;
       this.x2 = 0;
       this.t = 0;
+    }
+
+    yk(k, decay=this.r) {
+      let { scale, phase, frequency, sampleRate } = this;
+      let beta = 2 * Math.PI * frequency / sampleRate;
+      return scale * Math.pow(decay, k) * Math.cos(k*beta + phase);
     }
 
     step(x0) {
@@ -85,62 +99,44 @@
       return y0;
     }
 
-    play(opts={}) {
-      let { sampleRate, frequency:frequency1, r:r1, scale:scale1, phase:phase1} = this;
+    sample(opts={}) {
+      let { 
+        sampleRate, 
+        frequency: frequency1,
+        halfLifeSamples: halfLifeSamples1,
+        scale:scale1, 
+        phase:phase1,
+      } = this;
       let {
-        frequency:frequency2 = frequency1,
+        frequency = frequency1,
         nSamples = 1,
-        phase:phase2 = phase1,
-        r:r2 = r1,
-        scale:scale2 = scale1,
-        tStart = this.t,
-        tween = this.tween,
+        phase = phase1,
+        halfLifeSamples = halfLifeSamples1,
+        scale = scale1,
         type = Array,
         verbose = false,
       } = opts;
 
-      if (!tween) {
-        this.frequency = frequency1 = frequency2;
-        this.r = r1 = r2;
-        this.scale = scale1 = scale2;
-        this.phase = phase1 = phase2;
-      }
+      Object.assign(this, {frequency, halfLifeSamples, scale, phase});
+      let { r: decay } = this;
+      let beta = 2 * Math.PI * frequency / sampleRate;
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
          : new type(nSamples);
-      if (nSamples === 1) {
-        assert(frequency2 === frequency1, 
-          `[E_FREQUENCY2_SINGLE] frequency2 expected:${frequency1} actual:${frequency2}`);
-        assert(r2 === r1, `[E_R2_SINGLE] r2 expected:${r1} actual:${r2}`);
-        assert(scale2 === scale1, `[E_SCALE2_SINGLE] scale2 expected:${scale1} actual:${scale2}`);
-        assert(!isNaN(phase1), `[E_PHASE_NAN] expected number:${phase1}`);
-        this.r = r1;
-        assert(!isNaN(scale1), `[E_SCALE1_NAN] actual:${scale1}`);
-        assert(!isNaN(frequency1), `[E_SCALE1_NAN] actual:${frequency1}`);
-        let x0 = scale1 * Math.sin(2*Math.PI*frequency1*tStart/sampleRate+phase1);
-        samples[0] = this.step(x0);
-        return samples;
+      let ym1 = this.y1 - this.yk(-1,1);
+      let ym2 = this.y2 - this.yk(-2,1);
+      let a0 = decay * decay;
+      let a1 = - 2 * decay * Math.cos(beta);
+      for (let k = 0; k < nSamples; k++) {
+        let ySteady = this.yk(k, 1);
+        let yDecay = -ym1*a1 - ym2*a0;
+        samples[k] = ySteady + yDecay;
+        ym2 = ym1;
+        ym1 = yDecay;
       }
-      assert(0 < nSamples, `[E_NSAMPLES] expected at least 1 nSamples:${nSamples}`);
-      let tEnd = nSamples-1;
-      for (let tSample = 0; tSample <= tEnd; tSample++) {
-        let frequency = frequency1 === frequency2
-          ? frequency1
-          : ((tEnd - tSample)*frequency1 + tSample*frequency2)/tEnd;
-        let scale = scale1 === scale2
-          ? scale1
-          : ((tEnd - tSample)*scale1 + tSample*scale2)/tEnd;
-        let phase = phase1 === phase2 
-          ? phase1
-          : ((tEnd - tSample)*phase1 + tSample*phase2)/tEnd;
-        let r = r1 === r2 
-          ? r1
-          : ((tEnd - tSample)*r1 + tSample*r2)/tEnd;
-        let t= (tStart + tSample)/sampleRate;
-        let v = scale2 * Math.sin(2*Math.PI*frequency2*t+phase);
-        Object.assign(this, {frequency, r, phase, scale});
-        samples[tSample] = this.step(v);
-      }
+      this.y2 = samples[nSamples-2];
+      this.y1 = samples[nSamples-1];
+
       return samples;
     }
 

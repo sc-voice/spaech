@@ -80,6 +80,23 @@
     should(s6 instanceof type);
     should.deepEqual([...s6], sine.map(v=>Math.round(scale*v/10)));
   });
+  it("cosineWave()", ()=>{
+    let verbose = 0;
+    let chart = new Chart();
+    let frequency = 411;
+    let nSamples = 90;
+    let phase = Math.random()*Math.PI/2;
+    let sampleRate = 22050;
+    let scale = 10;
+    let s1 = Signal.cosineWave({frequency, nSamples, phase, scale, sampleRate, });
+    let s2 = Signal.sineWave({frequency, nSamples, phase:phase+Math.PI/2, scale, sampleRate, });
+    verbose && chart.plot({data:[s1,s2]});
+
+    let precision = 11; // this is surprisingly different
+    for (let i=0; i < nSamples; i++) {
+      should(s1[i].toFixed(precision)).equal(s2[i].toFixed(precision));
+    }
+  });
   it("sineWave() tStart", ()=>{
     let verbose = 0;
     let frequency = 411;
