@@ -33,7 +33,7 @@
       scale: 1,
     });
   });
-  it("TESTTESTcustom ctor", ()=>{
+  it("custom ctor", ()=>{
     let sampleRate = 22000;
     let halfLifeSamples = 48;
     let x1 = 1;
@@ -54,14 +54,13 @@
     should(resonator2).properties({ 
       frequency, t, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale, r });
   });
-  it("TESTTESTresonate() decays without input", ()=>{
+  it("resonate() attack and decay", ()=>{
     let verbose = 1;
     let frequency = 800;
     let halfLifeSamples = 8;
     let r1 = new Resonator({frequency, halfLifeSamples});
     let nSamples = 90;
 
-    // resonate can be single-stepped with some degree of precision
     let s1 = r1.resonate({nSamples});           // steady-state amplitude
     let s2 = r1.resonate({nSamples, scale:0});  // decline to zero
     let chart = new Chart({xInterval:1,lines:11});
@@ -83,7 +82,7 @@
     should(stats[3].stdDev).below(0.01);
   });
   it("oscillate()", ()=>{
-    let verbose = 0;
+    let verbose = 1;
     let frequency = 30*Math.random() + 150;
     let phase = 2*Math.PI*Math.random();
     let scale = 1000 * Math.random();
@@ -101,7 +100,63 @@
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
   });
-  it("TESTTESTresonate() one or many", ()=>{
+  it("TESTTESTplay()", ()=>{
+    return; TODO;
+    let verbose = 1;
+    let halfLifeSamples = 8;
+    let frequency = 30*Math.random() + 150;
+    verbose && (frequency = 899);
+    let phase = Math.PI / 2; 
+    let scale = 1000 * Math.random();
+    verbose && (scale = 100);
+    let nSamples = 95;
+    let sine = Signal.sineWave({frequency, phase, scale, nSamples});
+    let r1 = new Resonator({frequency, phase, scale, tween:0, halfLifeSamples});
+    let r2 = new Resonator({frequency, phase, scale, tween:1, halfLifeSamples});
+
+    // oscillate can be single-stepped with some degree of precision
+    let s1 = r1.play({nSamples});
+    should.deepEqual(s1, sine);
+    let s2 = r1.resonate({nSamples});
+    let precision = 10;
+    let chart = new Chart();
+    verbose && chart.plot({data:[s1,s2], xInterval:1});
+    console.log({r1,r2});
+
+    should(r1.y1.toFixed(precision)).equal(r2.y1.toFixed(precision));
+    should(r1.y2.toFixed(precision)).equal(r2.y2.toFixed(precision));
+    should(r1.x1.toFixed(precision)).equal(r2.x1.toFixed(precision));
+    should(r1.x2.toFixed(precision)).equal(r2.x2.toFixed(precision));
+  });
+  it("TESTTESToscillate() vs resonate()", ()=>{
+    return; // TODO
+    let verbose = 1;
+    let halfLifeSamples = 8;
+    let frequency = 30*Math.random() + 150;
+    verbose && (frequency = 899);
+    let phase = Math.PI / 2; 
+    let scale = 1000 * Math.random();
+    verbose && (scale = 100);
+    let nSamples = 95;
+    let sine = Signal.sineWave({frequency, phase, scale, nSamples});
+    let r1 = new Resonator({frequency, phase, scale, tween:0, halfLifeSamples});
+    let r2 = new Resonator({frequency, phase, scale, tween:1, halfLifeSamples});
+
+    // oscillate can be single-stepped with some degree of precision
+    let s1 = r1.oscillate({nSamples});
+    should.deepEqual(s1, sine);
+    let s2 = r1.resonate({nSamples});
+    let precision = 10;
+    let chart = new Chart();
+    verbose && chart.plot({data:[s1,s2], xInterval:1});
+    console.log({r1,r2});
+
+    should(r1.y1.toFixed(precision)).equal(r2.y1.toFixed(precision));
+    should(r1.y2.toFixed(precision)).equal(r2.y2.toFixed(precision));
+    should(r1.x1.toFixed(precision)).equal(r2.x1.toFixed(precision));
+    should(r1.x2.toFixed(precision)).equal(r2.x2.toFixed(precision));
+  });
+  it("resonate() one or many", ()=>{
     let verbose = 0;
     let r1 = new Resonator();
     let r2 = new Resonator();
@@ -111,10 +166,10 @@
     let s1 = r1.resonate({nSamples});
     let s2 = [...new Int8Array(nSamples)].map(()=>r2.resonate()[0]);
     let precision = 10;
-    should(r1.y1.toFixed(precision), r2.y1.toFixed(precision));
-    should(r1.y2.toFixed(precision), r2.y2.toFixed(precision));
-    should(r1.x1.toFixed(precision), r2.x1.toFixed(precision));
-    should(r1.x2.toFixed(precision), r2.x2.toFixed(precision));
+    should(r1.y1.toFixed(precision)).equal(r2.y1.toFixed(precision));
+    should(r1.y2.toFixed(precision)).equal(r2.y2.toFixed(precision));
+    should(r1.x1.toFixed(precision)).equal(r2.x1.toFixed(precision));
+    should(r1.x2.toFixed(precision)).equal(r2.x2.toFixed(precision));
     should.deepEqual(s1.map(v=>v.toFixed(precision)), s2.map(v=>v.toFixed(precision)));
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
@@ -178,7 +233,7 @@
     should(Math.round(pitch2)).above(f1).below(pitch1);
     should(Math.round(pitch1)).equal(f2);
   });
-  it("TESTTESTlinear recurrence", ()=>{
+  it("linear recurrence", ()=>{
     let verbose = 0;
     let fs = 22050;
     fs = 1*94;
@@ -212,7 +267,7 @@
     verbose && console.log({a1,a0,y1,y0, decay:Math.pow(gamma, N), halfLife});
     verbose && chart.plot({data:samples, xInterval});
   });
-  it("TESTTESTcos identity", ()=>{
+  it("cos identity", ()=>{
     let pi2 = Math.PI * 2;
     for (let i = 0; i < 100; i++) {
       let x = pi2*Math.random();
