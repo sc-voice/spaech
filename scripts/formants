@@ -56,8 +56,14 @@ DESCRIPTION
     -ha, --harmonic-amplitude
         Minimum harmonic amplitude to be recognized as a harmonic (1)
 
+    -hc, --harmonics-count
+        Number of harmonics (21)
+        
     -ho, --harmonic-output WAV_FILE
         Harmonic resonator WAV signal
+
+    -hs, --half-life-samples
+        Number of samples for zero-input signal half-life decay (8)
 
     -ll, --log-level
         Logging level: warn, error, [info], debug
@@ -67,6 +73,9 @@ DESCRIPTION
 
     -rc, --resonator-count COUNT
         Count of resonators in harmonic helmholz resonator bank (20)
+
+    -sa, --sample
+        Invoke sample() method of resonator bank instead of resonate() method.
 
     -os, --oscillate
         Invoke oscillate() method of resonator bank instead of resonate() method.
@@ -147,12 +156,18 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.minAmplitude = requiredNumber();
   } else if (arg === '-ho' || arg === '--harmonic-out') {
     cmdCfg.harmonicOut = requiredArg();
+  } else if (arg === '-hs' || arg === '--half-life-samples') {
+    cmdCfg.halfLifeSamples = requiredNumber();
   } else if (arg === '-mp' || arg === '--min-power') {
     cmdCfg.minPower = requiredNumber();
   } else if (arg === '-si' || arg === '--signal-in') {
     cmdCfg.signalIn = requiredArg();
   } else if (arg === '-ll' || arg === '--log-level') {
     cmdCfg.logLevel = logger.logLevel = requiredArg();
+  } else if (arg === '-sa' || arg === '--sample') {
+    cmdCfg.sample = true;
+  } else if (arg === '-hc' || arg === '--harmonics-count') {
+    cmdCfg.nHarmonics = requiredNumber();
   } else if (arg === '-os' || arg === '--oscillate') {
     cmdCfg.oscillate = true;
   } else if (arg === '-rc' || arg === '--resonator-count') {
@@ -205,14 +220,17 @@ async function configuration(cfg=cmdCfg) {
     diffMax: 0.1,
     fMin: 85,
     fMax: 300,
+    halfLifeSamples: 8,
     harmonicOut,
-    frameSize: 192,
+    frameSize: 96,
     logLevel: 'info',
     minAmplitude: 1,
     minPower: 1,
     oscillate: false,
+    nHarmonics: 21,
+    sample: false,
     resonatorCount: 20,
-    resonatorR: 0.98,
+    resonatorR: 0.945,
     skew: 0,
     signalIn,
     tweenResonator: false,
@@ -261,10 +279,13 @@ function inputsOfFrames(frames, inputSize) {
     fMin,
     fMax,
     frameSize,
+    halfLifeSamples,
     harmonicOut,
     minAmplitude,
     minPower,
+    nHarmonics,
     oscillate,
+    sample,
     residualOut,
     resonatorCount,
     resonatorR,
@@ -282,6 +303,7 @@ function inputsOfFrames(frames, inputSize) {
     length: resonatorCount, 
     frameSize,
     tween: tweenResonator,
+    halfLifeSamples,
   });
   let dataHarmonic = [];
   logger.info(script, argv.slice(2).join(' '));
@@ -295,9 +317,9 @@ function inputsOfFrames(frames, inputSize) {
   let nSamples = Math.ceil(yp.minSamples / frameSize) * frameSize;
   logger.info({nSamples, dataIn:dataIn.length});
   let chart = new Chart({lines:chartLines});
-  let resBankFun = oscillate 
-    ? (a1,a2)=>resBank.oscillate(a1,a2) 
-    : (a1,a2)=>resBank.resonate(a1,a2);
+  let resBankFun = (a1,a2)=>resBank.resonate(a1,a2);
+  oscillate && (resBankFun = (a1,a2)=>resBank.oscillate(a1,a2));
+  sample && (resBankFun = (a1,a2)=>resBank.sample(a1,a2));
 
   for (let i = 0; i < dataIn.length; i += frameSize) {
     let iFrame = i/frameSize;
@@ -307,7 +329,7 @@ function inputsOfFrames(frames, inputSize) {
     if (samples.length === nSamples) {
       let harmonics;
       try {
-        harmonics = yp.harmonics(samples);
+        harmonics = yp.harmonics(samples, {nHarmonics});
         dataHarmonic = dataHarmonic.concat(resBankFun(harmonics));
       } catch (e) {
         let ferr = path.join(__dirname, '../local/error.json');

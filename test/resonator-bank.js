@@ -9,8 +9,9 @@
     YinPitch,
   } = require('../index');
 
-  it("default ctor()", ()=>{
+  it("TESTTESTdefault ctor()", ()=>{
     let rb = new ResonatorBank();
+    let halfLifeSamples = 8;
     let length = 10;
     let sampleRate = 22050;
     let scale = 16384;
@@ -18,48 +19,86 @@
     let frequency = 200;
     let phase = 0;
     let r = 0.98;
-    should(rb).properties({ length, sampleRate, scale, frameSize, r, frequency, phase});
+    should(rb).properties({ 
+      halfLifeSamples, length, sampleRate, scale, frameSize, r, frequency, phase});
 
     let { resonators } = rb;
     should(resonators.length).equal(length);
     for (let i = 0; i < length; i++) {
-      should(resonators[i] instanceof Resonator);
-      should(resonators[i]).properties({ sampleRate, r, scale, });
+      let ri = resonators[i];
+      should(ri instanceof Resonator);
+      should(ri).properties({ sampleRate, scale, });
+      should(Math.abs(halfLifeSamples-ri.halfLifeSamples)).below(1e-15);
     }
   });
-  it("custom ctor()", ()=>{
+  it("TESTTESTcustom ctor()", ()=>{
     let length = 20;
     let sampleRate = 44100;
+    let halfLifeSamples = 9;
     let scale = 10000;
     let frameSize = 96;
     let frequency = 100;
     let phase = 1;
     let tween = true;
-    let rFirst = 0.98;
-    let rLast = 0.9;
-    let r = rFirst;
     let rb = new ResonatorBank({
-      length, sampleRate, scale, frameSize, r, frequency, phase, tween,
+      halfLifeSamples, length, sampleRate, scale, frameSize, frequency, phase, tween,
     });
     should(rb).properties({ 
-      length, sampleRate, scale, frameSize, r, frequency, phase, tween,
+      halfLifeSamples, length, sampleRate, scale, frameSize, frequency, phase, tween,
     });
 
     let { resonators } = rb;
     should(resonators.length).equal(length);
     for (let i = 0; i < length; i++) {
-      should(resonators[i] instanceof Resonator);
-      should(resonators[i]).properties({ sampleRate, scale, r, tween});
+      let ri = resonators[i];
+      should(ri instanceof Resonator);
+      should(ri).properties({ sampleRate, scale, tween});
+      should(Math.abs(halfLifeSamples-ri.halfLifeSamples)).below(4e-15);
     }
-
-    // resonator bank r-factors can be tweened
-    let rbTween = new ResonatorBank({
-      length, sampleRate, scale, frameSize, r:[rFirst, rLast], frequency, phase, tween,
+  });
+  it("TESTTESTsample()" , ()=>{
+    let verbose = 1;
+    let length = 3;
+    let frameSize = 90;
+    let rb = new ResonatorBank({length, frameSize});
+    should(rb).properties({
+      length, frameSize,
     });
-    let { resonators: rTween } = rbTween;
-    should(rTween[0].r).equal(rFirst);
-    should(rTween.slice(-1)[0].r).equal(rLast);
-    should(rTween[1].r).below(rFirst).above(rLast);
+    let f0 = 800;
+    let amplitude = 10000;
+    let harmonics = [
+      { order: 0, frequency: f0, amplitude: amplitude, phase: 0.1*Math.PI, },
+      { order: 1, frequency: 2*f0, amplitude: 0.8*amplitude, phase: -0.2*Math.PI, },
+      { order: 2, frequency: 3*f0, amplitude: 0.4*amplitude, phase: 0.3*Math.PI, },
+    ];
+    let samplesRaw = [
+      rb.sample(harmonics),
+      rb.sample(harmonics),
+      rb.sample([]),  // no input energy
+    ];
+    let resonateRaw = [
+      rb.resonate(harmonics),
+      rb.resonate(harmonics),
+      rb.resonate([]),  // no input energy
+    ];
+    let samples = samplesRaw.flat();
+    let resonate = resonateRaw.flat();
+    let chart = new Chart();
+    let title = `1:sample() 2:resonate()`;
+    verbose && chart.plot({title, dataset:[samples, resonate], lineLength: frameSize});
+    let stats0 = Signal.stats(samplesRaw[0]);
+    let stats1 = Signal.stats(samplesRaw[1]);
+    let stats2a = Signal.stats(samplesRaw[2].slice(0, frameSize/2));
+    let stats2b = Signal.stats(samplesRaw[2].slice(frameSize/2));
+    should(stats0).properties({ count: frameSize, });
+    should(stats1).properties({ count: frameSize, });
+
+    // signal builds initially
+    should(stats0.stdDev).above(1).below(stats1.stdDev);
+
+    // signal decays without input
+    should(stats2a.stdDev).above(1).below(stats1.stdDev);
+    should(stats2b.stdDev).above(1).below(stats2a.stdDev);
   });
   it("resonate()" , ()=>{
     let verbose = 0;

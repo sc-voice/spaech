@@ -101,7 +101,7 @@
     let chart = new Chart();
     verbose && chart.plot({data:[s1], xInterval:5});
   });
-  it("TESTTESTsample()", ()=>{
+  it("sample()", ()=>{
     let verbose = 1;
     let nSamples = 95;
     let halfLives = 8; 
