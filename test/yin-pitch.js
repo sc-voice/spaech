@@ -191,32 +191,36 @@
     should(error).below(0.21); // error rate decreases with frequency
     should(pitch).equal(170.2); // different than E1
   });
-  it("pitch() changing frequencies", ()=>{
-    let verbose = 0;
-    let frequency = 200;
-    let dFreq = -2;
-    let frequency1 = frequency - dFreq;
-    let frequency2 = frequency + dFreq;
-    let phase = 3.602657466317041;
+  it("TESTTESTpitch() changing frequencies", ()=>{
+    let verbose = 1;
+    let freqNominal = 200;
+    let dFreq = freqNominal * Math.random();
+    let freqInitial = freqNominal + (Math.random() < 0.5 ? -dFreq : dFreq);
+    let phase1 = Math.PI*Math.random();
+    let phase2 = Math.PI*Math.random();
     let yp = new YinPitch();
-    let tSample = 1000;
-    let nSamples = 2000;
-    let hr = new Resonator({frequency:frequency1, phase});
-    let samples = hr.oscillate({frequency:frequency2, tween:1, nSamples});
+    let nSamples = 840;
+    let halfLifeSamples = 8;
+    let hr = new Resonator({frequency:freqInitial, initialScale:1, phase:phase1, halfLifeSamples});
+    let samples = hr.sample({frequency:freqNominal, phase:phase2, nSamples});
     let { pitch, pitchEst, tau, tauEst, acf, } = yp.pitch(samples);
     let xInterval = 10;
-    let lines = 7;
-    verbose && (new Chart({title:'samples',data:[samples],xInterval,lines})).plot();
-    verbose && (new Chart({title:'ACFdifference',data:[acf],xInterval,lines})).plot();
-    let error = Math.abs(pitch-frequency);
+    let lines = 5;
+    let error = Math.abs(pitch-freqNominal);
     verbose && console.log(`YIN`, {
-      frequency, phase, pitch, pitchEst, error, tau, tauEst, nSamples, 
+      freqNominal, freqInitial, phase1, phase2, pitch, pitchEst, error, tau, tauEst, nSamples, 
       window: yp.window,
       tauMin: yp.tauMin,
       tauMax: yp.tauMax,
     });
-    should(pitch).above(0, `could not detect pitch for phase:${phase}`);
-    should(pitch).equal(200.4);  // pitch is determined from mid-sample
+    verbose && (new Chart({title:'samples',data:[samples],xInterval,lines})).plot();
+    try {
+      should(pitch).above(0);
+      should(pitch).equal(freqNominal);  // pitch is determined from mid-sample
+    } catch(e) {
+      console.warn(`ERROR`, {pitch, dFreq, freqInitial, freqNominal});
+      throw e;
+    }
   });
   it("pitch() FREQ_WOMAN", ()=>{
     let verbose = 0;

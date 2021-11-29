@@ -74,26 +74,14 @@ DESCRIPTION
     -rc, --resonator-count COUNT
         Count of resonators in harmonic helmholz resonator bank (20)
 
-    -sa, --sample
-        Invoke sample() method of resonator bank instead of resonate() method.
-
-    -os, --oscillate
-        Invoke oscillate() method of resonator bank instead of resonate() method.
-
     -ro, --residual-out WAV_FILE
         Residual non-harmonic output file
-
-    -rr, --resonator-r R1,RN
-        Feedback coefficient tweening interval for resonator bank (0.995,0.98)
 
     -si, --signal-in WAV_FILE
         Input signal 
 
     -sk, --skew NSAMPLES
         Advance output by given number of samples (0)
-
-    -tw, --tween
-        Interpolate resonator changes (false)
 
     -vb, --verbose
         Verbose output
@@ -168,18 +156,12 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.sample = true;
   } else if (arg === '-hc' || arg === '--harmonics-count') {
     cmdCfg.nHarmonics = requiredNumber();
-  } else if (arg === '-os' || arg === '--oscillate') {
-    cmdCfg.oscillate = true;
   } else if (arg === '-rc' || arg === '--resonator-count') {
     cmdCfg.resonatorCount = requiredNumber();
   } else if (arg === '-ro' || arg === '--residual-out') {
     cmdCfg.residualOut = requiredArg();
-  } else if (arg === '-rr' || arg === '--resonator-r') {
-    cmdCfg.resonatorR = requiredArg().split(',').map(v=>Number(v));
   } else if (arg === '-sk' || arg === '--skew') {
     cmdCfg.skew = requiredNumber();
-  } else if (arg === '-tw' || arg === '--tween') {
-    cmdCfg.tweenResonator = true;
   } else if (arg === '-vb' || arg === '--verbose') {
     cmdCfg.verbose = true;
   } else if (arg === '-vf' || arg === '--verbose-frames') {
@@ -226,14 +208,11 @@ async function configuration(cfg=cmdCfg) {
     logLevel: 'info',
     minAmplitude: 1,
     minPower: 1,
-    oscillate: false,
     nHarmonics: 21,
     sample: false,
     resonatorCount: 20,
-    resonatorR: 0.945,
     skew: 0,
     signalIn,
-    tweenResonator: false,
     verbose: false,
     window: 551,
 
@@ -284,14 +263,11 @@ function inputsOfFrames(frames, inputSize) {
     minAmplitude,
     minPower,
     nHarmonics,
-    oscillate,
     sample,
     residualOut,
     resonatorCount,
-    resonatorR,
     signalIn, 
     skew,
-    tweenResonator,
     verbose,
     verboseFrame1,
     verboseFrameN,
@@ -299,10 +275,8 @@ function inputsOfFrames(frames, inputSize) {
 
   } = cfg;
   let resBank = new ResonatorBank({
-    r:resonatorR, 
     length: resonatorCount, 
     frameSize,
-    tween: tweenResonator,
     halfLifeSamples,
   });
   let dataHarmonic = [];
@@ -317,9 +291,7 @@ function inputsOfFrames(frames, inputSize) {
   let nSamples = Math.ceil(yp.minSamples / frameSize) * frameSize;
   logger.info({nSamples, dataIn:dataIn.length});
   let chart = new Chart({lines:chartLines});
-  let resBankFun = (a1,a2)=>resBank.resonate(a1,a2);
-  oscillate && (resBankFun = (a1,a2)=>resBank.oscillate(a1,a2));
-  sample && (resBankFun = (a1,a2)=>resBank.sample(a1,a2));
+  let resBankFun = (a1,a2)=>resBank.sample(a1,a2);
 
   for (let i = 0; i < dataIn.length; i += frameSize) {
     let iFrame = i/frameSize;

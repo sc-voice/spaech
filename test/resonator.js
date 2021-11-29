@@ -18,16 +18,13 @@
 
   it("TESTTESTdefault ctor", ()=>{
     let resonator = new Resonator();
-    let halfLifeSamples = 96.00000000000006;
-    let r = Math.pow(0.5, 1/halfLifeSamples);
+    let halfLifeSamples = Infinity;
+    let r = 1;
     should(resonator).properties({
       sampleRate: 22050,
-      frequency: 200,
+      frequency: 0,
       r,
-      t: 0,
       halfLifeSamples,
-      x1: 0,
-      x2: 0,
       y1: 0,
       y2: 0,
       scale: 1,
@@ -36,70 +33,221 @@
   it("TESTTESTcustom ctor", ()=>{
     let sampleRate = 22000;
     let halfLifeSamples = 48;
-    let x1 = 1;
-    let x2 = 2;
     let y1 = 3;
     let y2 = 4;
     let scale = 5;
-    let t = 1;
     let frequency = 100;
     let r = Math.pow(0.5, 1/halfLifeSamples);
 
-    let resonator = new Resonator({t, frequency, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale});
-    should(resonator).properties({ frequency, t, sampleRate, x1, x2, y1, y2, scale, r });
+    let resonator = new Resonator({frequency, sampleRate, halfLifeSamples, y1, y2, scale});
+    should(resonator).properties({ frequency, sampleRate, y1, y2, scale, r });
     let precision = 13;
     should(resonator.halfLifeSamples.toFixed(precision)).equal(halfLifeSamples.toFixed(precision));
 
-    let resonator2 = new Resonator({t, frequency, sampleRate, r, x1, x2, y1, y2, scale});
+    let resonator2 = new Resonator({frequency, sampleRate, r, y1, y2, scale});
     halfLifeSamples = Math.log(0.5) / Math.log(r);
     should(resonator2).properties({ 
-      frequency, t, sampleRate, halfLifeSamples, x1, x2, y1, y2, scale, r });
+      frequency, sampleRate, halfLifeSamples, y1, y2, scale, r });
   });
-  it("resonate() attack and decay", ()=>{
-    let verbose = 1;
-    let frequency = 800;
-    let halfLifeSamples = 8;
-    let r1 = new Resonator({frequency, halfLifeSamples});
-    let nSamples = 90;
-
-    let s1 = r1.resonate({nSamples});           // steady-state amplitude
-    let s2 = r1.resonate({nSamples, scale:0});  // decline to zero
-    let chart = new Chart({xInterval:1,lines:11});
-    verbose && chart.plot({title:`s1`, data:s1});
-    verbose && chart.plot({title:`s2`, data:s2});
-    let stats = [
-      Signal.stats(s1.slice(0,nSamples/2)), // first half, increasing
-      Signal.stats(s1.slice(nSamples/2)),   // second half, steady state
-      Signal.stats(s2.slice(0,nSamples/2)), // first half, declining
-      Signal.stats(s2.slice(nSamples/2)),   // second half, steady state
-    ];
-    verbose && console.log(`stddev`, ...stats.map(v=>v.stdDev));
-    verbose && console.log(`max`, ...stats.map(v=>v.max));
-
-    // resonate with no signal energy results in a decaying signal
-    should(stats[0].stdDev).below(0.6);
-    should(stats[1].stdDev).above(0.7);
-    should(stats[2].stdDev).above(0.2);   
-    should(stats[3].stdDev).below(0.01);
+  it("halfLife", ()=>{
+    let precision = 12;
+    should(Resonator.halfLifeDecay(Infinity)).equal(1);
+    should(Resonator.halfLifeSamples(1)).equal(Infinity);
+    should(Resonator.halfLifeDecay(8)).equal(0.9170040432046712);
+    should(Number(Resonator.halfLifeSamples(0.9170040432046712).toFixed(precision))).equal(8);
+    should(Resonator.halfLifeDecay(1)).equal(0.5);
+    should(Number(Resonator.halfLifeSamples(0.5).toFixed(precision))).equal(1);
   });
-  it("oscillate()", ()=>{
-    let verbose = 1;
-    let frequency = 30*Math.random() + 150;
-    let phase = 2*Math.PI*Math.random();
+  it("sample() steady state", ()=>{
+    let verbose = 0;
     let scale = 1000 * Math.random();
-    let nSamples = 400;
-    let sine = Signal.sineWave({frequency, phase, scale, nSamples});
-    let r1 = new Resonator({frequency, phase, scale});
-    let r2 = new Resonator({frequency, phase, scale});
-
-    // oscillate can be single-stepped with some degree of precision
-    let s1 = r1.oscillate({nSamples});
-    should.deepEqual(s1, sine);
-    let s2 = [...new Int8Array(nSamples)].map(()=>r2.oscillate()[0]);
+    let initialScale = scale; // nominal scale
+    let nSamples = 95;
+    let halfLifeSamples = Infinity; // steady state
+    let frequency = 30*Math.random() + 800;
+    let phase = Math.random()*Math.PI;
+    let nominal = Signal.cosineWave({frequency, phase, scale, nSamples});
+    let r1 = new Resonator({frequency, phase, scale, initialScale, halfLifeSamples});
+    let s1 = r1.sample({nSamples});
     let precision = 10;
-    should.deepEqual(s1.map(v=>v.toFixed(precision)), s2.map(v=>v.toFixed(precision)));
     let chart = new Chart();
-    verbose && chart.plot({data:[s1], xInterval:5});
+    let title = `1:nominal 2:samples`;
+    verbose && chart.plot({title,data:[nominal,s1], xInterval:1});
+    let nm1 = nSamples - 1;
+    let nm2 = nSamples - 2;
+    let yErr = Math.abs(nominal[nm1] - s1[nm1]);
+    verbose && console.log({r1, yErr, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
+    try {
+      should(yErr).equal(0);
+      should(r1.y1).equal(s1[nm1]);
+      should(r1.y2).equal(s1[nm2]);
+    } catch(e) {
+      console.warn(`ERROR`, {frequency, scale, phase});
+      throw e;
+    }
+  });
+  it("sample() steady state decay", ()=>{
+    let verbose = 0;
+    let initialScale = 100;  // steady state
+    let scale = 0; // nominal scale
+    let nSamples = 95;
+    let generations = 5;
+    let halfLifeSamples = nSamples/generations; // decay
+    let attenuation = Math.pow(0.5, generations);
+    let frequency = 30*Math.random() + 800;
+    let phase = Math.random()*Math.PI;
+    let nominal = Signal.cosineWave({frequency, phase, scale, nSamples});
+    let r1 = new Resonator({frequency, phase, scale, initialScale, halfLifeSamples});
+    let s1 = r1.sample({nSamples});
+    let precision = 10;
+    let chart = new Chart();
+    let title = `1:nominal 2:samples`;
+    verbose && chart.plot({title,data:[nominal,s1], xInterval:1});
+    let nm1 = nSamples - 1;
+    let nm2 = nSamples - 2;
+    let yErr = Math.abs(nominal[nm1] - s1[nm1]);
+    verbose && console.log({r1, yErr, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
+    try {
+      should(yErr).below(attenuation*initialScale);
+      should(r1.y1).equal(s1[nm1]);
+      should(r1.y2).equal(s1[nm2]);
+    } catch(e) {
+      console.warn(`ERROR`, {frequency, scale, phase});
+      throw e;
+    }
+  });
+  it("sample() steady state attack", ()=>{
+    let verbose = 0;
+    let initialScale = 0;  // steady state
+    let scale = 100; // nominal scale
+    let nSamples = 95;
+    let generations = 10;
+    let halfLifeSamples = nSamples/generations; // decay
+    let attenuation = Math.pow(0.5, generations);
+    let frequency = 30*Math.random() + 800;
+    let phase = Math.random()*Math.PI;
+    let nominal = Signal.cosineWave({frequency, phase, scale, nSamples});
+    let r1 = new Resonator({frequency, phase, scale, initialScale, halfLifeSamples});
+    let s1 = r1.sample({nSamples});
+    let precision = 10;
+    let chart = new Chart();
+    let title = `1:nominal 2:samples`;
+    verbose && chart.plot({title,data:[nominal,s1], xInterval:1});
+    let nm1 = nSamples - 1;
+    let nm2 = nSamples - 2;
+    let yErr = Math.abs(nominal[nm1] - s1[nm1]);
+    verbose && console.log({r1, yErr, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
+    try {
+      should(yErr).below(attenuation*scale);
+      should(r1.y1).equal(s1[nm1]);
+      should(r1.y2).equal(s1[nm2]);
+    } catch(e) {
+      console.warn(`ERROR`, {frequency, scale, phase});
+      throw e;
+    }
+  });
+  it("TESTTESTsample() steady state frequency change", ()=>{
+    let verbose = 0;
+    let scale = 100; 
+    let initialScale = scale; // steady state
+    let nSamples = 95;
+    let generations = 10;
+    let halfLifeSamples = nSamples/generations; // decay
+    let attenuation = Math.pow(0.5, generations);
+    let frequency1 = 800;
+    verbose && (frequency1 = 800);
+    let dFreq = 0.4 * frequency1;
+    let frequency2 = frequency1 + (Math.random() < 0.5 ? -dFreq : dFreq);
+    let phase = Math.random()*Math.PI;
+    let nominal = Signal.cosineWave({frequency:frequency2, phase, scale, nSamples});
+    let precision = 10;
+
+    let r1 = new Resonator({frequency:frequency1, phase, scale, initialScale, halfLifeSamples});
+    let s1 = r1.sample({frequency:frequency2, nSamples, phase}); // frequency change
+    let chart = new Chart();
+    let title = `1:nominal 2:samples`;
+    verbose && chart.plot({title,data:[nominal,s1], xInterval:1});
+    let nm1 = nSamples - 1;
+    let nm2 = nSamples - 2;
+    let yErr = Math.abs(nominal[nm1] - s1[nm1]);
+    verbose && console.log({
+      r1, yErr, attenuation, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
+    try {
+      should(yErr).below(attenuation*scale);
+      should(r1.y1).equal(s1[nm1]);
+      should(r1.y2).equal(s1[nm2]);
+    } catch(e) {
+      console.warn(`ERROR`, {frequency1, frequency2, scale, phase});
+      throw e;
+    }
+  });
+  it("TESTTESTsample() steady state phase change", ()=>{
+    let verbose = 0;
+    let scale = 100; 
+    let initialScale = scale; // steady state
+    let nSamples = 95;
+    let generations = 10;
+    let halfLifeSamples = nSamples/generations; // decay
+    let attenuation = Math.pow(0.5, generations);
+    let frequency = 800;
+    let phase1 = Math.random()*Math.PI;
+    verbose && (phase1 = 1.4440342097717895);
+    let phase2 = phase1 + Math.random()*Math.PI;
+    verbose && (phase2 = 3.928251675517886);
+    let nominal = Signal.cosineWave({frequency, phase:phase2, scale, nSamples});
+    let precision = 10;
+
+    let r1 = new Resonator({frequency, phase:phase1, scale, initialScale, halfLifeSamples});
+    let s1 = r1.sample({frequency, nSamples, phase:phase2}); // phase change
+    let chart = new Chart();
+    let title = `1:nominal 2:samples`;
+    verbose && chart.plot({title,data:[nominal,s1], xInterval:1});
+    let nm1 = nSamples - 1;
+    let nm2 = nSamples - 2;
+    let yErr = Math.abs(nominal[nm1] - s1[nm1]);
+    verbose && console.log({
+      r1, yErr, attenuation, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
+    try {
+      should(yErr).below(attenuation*scale*2);
+      should(r1.y1).equal(s1[nm1]);
+      should(r1.y2).equal(s1[nm2]);
+    } catch(e) {
+      console.warn(`ERROR`, {frequency, scale, phase1, phase2});
+      throw e;
+    }
+  });
+  it("TESTTESTsample() steady state phase change", ()=>{
+    return; // TODO
+    let verbose = 1;
+    let scale = 100; 
+    let nSamples = 95;
+    let generations = 10;
+    let halfLifeSamples = nSamples/generations; // decay
+    let attenuation = Math.pow(0.5, generations);
+    let frequency = 30*Math.random() + 800;
+    verbose && (frequency = 800);
+    let phase1 = Math.random()*Math.PI;
+    verbose && (phase1 = 0.19238118132340623);
+    let phase2 = phase1 + Math.PI;
+    let r1 = new Resonator({frequency, phase:phase1, scale, initialScale:scale, halfLifeSamples});
+    let nominal = Signal.cosineWave({frequency, phase2, scale, nSamples});
+    let s1 = r1.sample({nSamples, phase:phase2});
+    let precision = 10;
+    let chart = new Chart();
+    let title = `1:nominal 2:samples`;
+    verbose && chart.plot({title,data:[nominal,s1], xInterval:1});
+    let nm1 = nSamples - 1;
+    let nm2 = nSamples - 2;
+    let yErr = Math.abs(nominal[nm1] - s1[nm1]);
+    verbose && console.log({r1, yErr, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
+    try {
+      should(yErr).below(attenuation*scale);
+      should(r1.y1).equal(s1[nm1]);
+      should(r1.y2).equal(s1[nm2]);
+    } catch(e) {
+      console.warn(`ERROR`, {frequency, scale, phase1, phase2});
+      throw e;
+    }
   });
   it("sample()", ()=>{
     let verbose = 1;
@@ -115,9 +263,8 @@
     let scale = 1000 * Math.random();
     verbose && (scale = 100);
     let cos = Signal.cosineWave({frequency, phase, scale, nSamples});
-    let r1 = new Resonator({frequency, phase, scale, tween:0, halfLifeSamples});
+    let r1 = new Resonator({frequency, phase, scale, halfLifeSamples});
 
-    // oscillate can be single-stepped with some degree of precision
     let s1 = r1.sample({nSamples});
     let precision = 10;
     let chart = new Chart();
@@ -131,113 +278,6 @@
 
     //should(r1.y1.toFixed(precision)).equal(r2.y1.toFixed(precision));
     //should(r1.y2.toFixed(precision)).equal(r2.y2.toFixed(precision));
-    //should(r1.x1.toFixed(precision)).equal(r2.x1.toFixed(precision));
-    //should(r1.x2.toFixed(precision)).equal(r2.x2.toFixed(precision));
-  });
-  it("TESTTESToscillate() vs resonate()", ()=>{
-    return; // TODO
-    let verbose = 1;
-    let halfLifeSamples = 8;
-    let frequency = 30*Math.random() + 150;
-    verbose && (frequency = 899);
-    let phase = Math.PI / 2; 
-    let scale = 1000 * Math.random();
-    verbose && (scale = 100);
-    let nSamples = 95;
-    let sine = Signal.sineWave({frequency, phase, scale, nSamples});
-    let r1 = new Resonator({frequency, phase, scale, tween:0, halfLifeSamples});
-    let r2 = new Resonator({frequency, phase, scale, tween:1, halfLifeSamples});
-
-    // oscillate can be single-stepped with some degree of precision
-    let s1 = r1.oscillate({nSamples});
-    should.deepEqual(s1, sine);
-    let s2 = r1.resonate({nSamples});
-    let precision = 10;
-    let chart = new Chart();
-    verbose && chart.plot({data:[s1,s2], xInterval:1});
-    console.log({r1,r2});
-
-    should(r1.y1.toFixed(precision)).equal(r2.y1.toFixed(precision));
-    should(r1.y2.toFixed(precision)).equal(r2.y2.toFixed(precision));
-    should(r1.x1.toFixed(precision)).equal(r2.x1.toFixed(precision));
-    should(r1.x2.toFixed(precision)).equal(r2.x2.toFixed(precision));
-  });
-  it("resonate() one or many", ()=>{
-    let verbose = 0;
-    let r1 = new Resonator();
-    let r2 = new Resonator();
-    let nSamples = 400;
-
-    // resonate can be single-stepped with some degree of precision
-    let s1 = r1.resonate({nSamples});
-    let s2 = [...new Int8Array(nSamples)].map(()=>r2.resonate()[0]);
-    let precision = 10;
-    should(r1.y1.toFixed(precision)).equal(r2.y1.toFixed(precision));
-    should(r1.y2.toFixed(precision)).equal(r2.y2.toFixed(precision));
-    should(r1.x1.toFixed(precision)).equal(r2.x1.toFixed(precision));
-    should(r1.x2.toFixed(precision)).equal(r2.x2.toFixed(precision));
-    should.deepEqual(s1.map(v=>v.toFixed(precision)), s2.map(v=>v.toFixed(precision)));
-    let chart = new Chart();
-    verbose && chart.plot({data:[s1], xInterval:5});
-    let stats = Signal.stats(s1);
-    should(stats.iMax).equal(357);
-    should(stats.max.toFixed(precision)).equal((0.9215343958).toFixed(precision));
-  });
-  it("resonate() changes frequency", ()=>{
-    let verbose = 0;
-    let r1 = new Resonator({r:0.99});
-    let nSamples = 400;
-    let xInterval = 4;
-    let f1 = 220;
-    let f2 = Number((1.2*f1).toFixed(1));
-    let s1 = r1.resonate({nSamples, frequency:f1, scale:1});
-    should(r1).properties({ frequency:f1, t:1*nSamples});
-    let chart = new Chart();
-    verbose && chart.plot({title: `resonate $ f1}...${f2} Hz`, data:[s1], xInterval});
-
-    let s2 = r1.resonate({nSamples, frequency:f2});
-    verbose && chart.plot({title: `resonate ${f2} Hz`, data:[s2], xInterval});
-    should(r1).properties({ frequency:f2, scale:1, t:2*nSamples});
-
-    let s3 = r1.resonate({nSamples, scale:0});
-    verbose && chart.plot({title:`resonate scale:0`, data:[s3], xInterval});
-    let stats = Signal.stats(s1);
-    //should(stats).properties({iMax:358, max:0.8320586576302439});
-    should(r1).properties({ frequency:f2, scale:0, t:3*nSamples});
-  });
-  it("resonate() tweens", ()=>{
-    let verbose = 0;
-    let scale = 1;
-    // For pitch detection, the f2 and f1 must be close
-    let f1 = 220;
-    let f2 = Number((1.3*f1).toFixed(1));
-    let scale1 = 1;
-    let scale2 = 2;
-    let r = 0.999;
-    let r1 = new Resonator({r, frequency:f1});
-    let r2 = new Resonator({r, frequency:f1});
-    let r3 = new Resonator({r, frequency:f1, tween:true});
-    let nSamples = 2000;
-    let s1 = r1.resonate({nSamples, frequency:f2, tween:false, scale:scale1});
-    let s2 = r2.resonate({nSamples, frequency:f2, tween:true, scale:scale2});
-    let s3 = r3.resonate({nSamples, frequency:f2, scale:scale2}); // tween from instance
-    let rFun = YinPitch.yinE1;
-    let yp = new YinPitch({rFun});
-    let xInterval = 5;
-    let chart = new Chart();
-    let title = `resonate(${f1}...${f2}Hz) 1:no-tween 2:tween`;
-    verbose && chart.plot({title, data:[s1,s2], xInterval});
-    should(r1).properties({ frequency:f2, scale:scale1, t:1*nSamples});
-    should(r2).properties({ frequency:f2, scale:scale2, t:1*nSamples});
-    should.deepEqual(s3, s2); // both are tweened
-
-    // Tweening changes the resonator throughout the interval,
-    // so the perceived pitch will be intermediate
-    let {pitch:pitch1} = yp.pitch(s1);
-    let {pitch:pitch2} = yp.pitch(s2);
-    verbose && console.log({pitch1, pitch2});
-    should(Math.round(pitch2)).above(f1).below(pitch1);
-    should(Math.round(pitch1)).equal(f2);
   });
   it("linear recurrence", ()=>{
     let verbose = 0;
