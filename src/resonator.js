@@ -15,6 +15,7 @@
         y2,                   // output at t-2
         scale = 1,            // peak amplitude
         initialScale = 0,     // prior state
+        type = Array,         // sample type
       } = opts;
       assert(r == null || halfLifeSamples == null, `[E_HALFLIFESAMPLES_R] mutually exclusive`);
       if (r == null && halfLifeSamples == null) {
@@ -30,7 +31,7 @@
       let samplePeriod = 1/sampleRate;
 
       Object.assign(this, { 
-        r, frequency, sampleRate, samplePeriod, y1, y2, scale, phase, 
+        r, frequency, sampleRate, samplePeriod, y1, y2, scale, phase, type,
       });
 
       y1 == null && (this.y1 = this.yk(-1, 1, initialScale));
@@ -67,26 +68,20 @@
     }
 
     sample(opts={}) {
-      let { 
-        sampleRate, 
-        frequency: frequency1,
-        halfLifeSamples: halfLifeSamples1,
-        scale:scale1, 
-        phase:phase1,
-      } = this;
       let {
-        frequency = frequency1,
+        sampleRate = this.sampleRate,
+        frequency = this.frequency,
         nSamples = 1,
-        phase = phase1,
-        halfLifeSamples = halfLifeSamples1,
-        scale = scale1,
-        type = Array,
+        phase = this.phase,
+        halfLifeSamples = this.halfLifeSamples,
+        scale = this.scale,
         verbose = false,
+        type = this.type,
       } = opts;
 
       Object.assign(this, {frequency, halfLifeSamples, scale, phase});
       let { r: decay } = this;
-      let samples = Signal.cosineWave({frequency, scale, phase, nSamples, sampleRate});
+      let samples = Signal.cosineWave({frequency, scale, phase, nSamples, sampleRate, type});
       let beta = 2 * Math.PI * frequency / sampleRate;
       let ym1 = this.y1 - this.yk(-1,1);
       let ym2 = this.y2 - this.yk(-2,1);

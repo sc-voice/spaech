@@ -147,15 +147,15 @@
         );
       let sqDev = 0;
       for (let i=0; i<count; i++) {
-        let d = data[i];
-        let dev = d-avg;
+        let di = data[i];
+        let dev = di-avg;
         sqDev += dev*dev;
-        if (d < min) {
-          min = d;
+        if (di < min) {
+          min = di;
           iMin = i;
         }
-        if (max < d) {
-          max = d;
+        if (max < di) {
+          max = di;
           iMax = i;
         }
       }

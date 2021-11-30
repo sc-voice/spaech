@@ -10,22 +10,15 @@
   it("TESTTESTdefault ctor", ()=>{
     let wn = new WhiteNoise();
     should(wn).properties({
+      basis: 12,
       variance: 1,
-      supportSize: 256,
-      type: Array,
     });
   });
-  it("TESTTESTsample()", ()=> {
+  it("sample() steady-state white noise", ()=> {
     let verbose = 0;
-    let variance = 4;
-    let supportSize = 1000;
-    let type0 = Int32Array;
-    let type = Int16Array;
-    let wn = new WhiteNoise({supportSize, variance, type:type0});
-    should(wn).properties({supportSize, variance, type:type0});
+    let wn = new WhiteNoise();
     let nSamples = 1000;
-    let samples = wn.sample({nSamples, type});
-    should(samples).instanceOf(type);
+    let samples = wn.sample({nSamples});
     let chart = new Chart();
     verbose && chart.plot({data:samples, xInterval:Math.round(nSamples/95)});
     let stats = Signal.stats(samples);
@@ -44,7 +37,29 @@
     should(min).above(-5*stdDev);
     should(Math.abs(median)).below(3e-1);
     should(Math.abs(avg)).below(3e-1);
-    should(Math.abs(stdDev - Math.sqrt(variance))).below(5e-1);
+    should(Math.abs(stdDev - 1)).below(5e-2);
+  });
+  it("TESTTESTsample() frequency synchronized white-noise", ()=> {
+    let verbose = 1;
+    let sampleRate = 22050;
+    let frequency = 200;
+    let periodSamples = sampleRate / frequency;
+    let phase = Math.PI/2;
+    let wn = new WhiteNoise({frequency, phase, });
+    let nSamples = 95;
+    let samples = wn.sample({nSamples});
+    let envelope = Signal.cosineWave({nSamples, frequency, phase});
+    let chart = new Chart({lines:13});
+    let title = `1:envelope 2:white-noise`;
+    verbose && chart.plot({data:[envelope, samples]});
+    let statsLo = Signal.stats(samples.slice(45,65)); // near zero-crossing
+    let statsHi = Signal.stats(samples.slice(20,40)); // near peak
+    verbose && console.log({periodSamples, statsLo, statsHi});
+    should(statsLo.stdDev).below(0.5);  // noise is lower at zero-crossing
+    should(statsHi.stdDev).above(0.6);  // noise is higher at peaks
+    should(Math.abs(statsLo.stdDev)).below(0.5*Math.abs(statsHi.stdDev));
+    should(Math.abs(statsLo.avg)).below(0.2); 
+    should(Math.abs(statsHi.avg)).below(0.6); 
   });
 
 })

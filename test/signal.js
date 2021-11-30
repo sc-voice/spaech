@@ -139,6 +139,18 @@
       min: 1,
       stdDev: 21.2818388929779, /* population standard deviation */
     });
+    let data = [2, 4, 4, 4, 5, 5, 7, 9];
+    should.deepEqual(Signal.stats(data), {
+      count: 8,
+      avg: 5,
+      iMax: 7,
+      iMin: 0,
+      median: 4.5,
+      sum: 40,
+      max: 9,
+      min: 2,
+      stdDev: 2, /* population standard deviation */
+    });
   });
   it("rmsErr(a,b) => root mean square error", ()=>{
     let a = [1,2,3,4,5];
