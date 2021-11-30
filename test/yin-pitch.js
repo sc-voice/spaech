@@ -191,8 +191,8 @@
     should(error).below(0.21); // error rate decreases with frequency
     should(pitch).equal(170.2); // different than E1
   });
-  it("TESTTESTpitch() changing frequencies", ()=>{
-    let verbose = 1;
+  it("pitch() changing frequencies", ()=>{
+    let verbose = 0;
     let freqNominal = 200;
     let dFreq = freqNominal * Math.random();
     let freqInitial = freqNominal + (Math.random() < 0.5 ? -dFreq : dFreq);

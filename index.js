@@ -9,6 +9,7 @@ module.exports = {
   ResonatorBank: require('./src/resonator-bank'),
   Signal: require('./src/signal'),
   Snake: require('./src/snake'),
+  WhiteNoise: require('./src/white-noise'),
   WordWindow: require('./src/word-window'),
   YinPitch: require('./src/yin-pitch'),
 
