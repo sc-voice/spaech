@@ -3,13 +3,16 @@
   const Resonator = require('./resonator');
   const assert = require('assert');
 
-  class WhiteNoise {
+  class Noise {
     constructor(opts={}) {
       let { 
         basis = 12,
         frequency = 0,
         phase = 0,
+        color,
       } = opts;
+
+      assert(color, 'Use factory methods for Noise');
 
       let resonator = new Resonator({
         frequency, 
@@ -19,10 +22,16 @@
       });
 
       Object.assign(this, {
+        color,
         frequency,
         resonator,
         basis,
       })
+    }
+
+    static createWhiteNoise(opts={}) {
+      Object.assign(opts, {basis:12, color:'white'}, opts);
+      return new Noise(opts);
     }
 
     get variance() {
@@ -55,6 +64,6 @@
 
   }
 
-  module.exports = exports.WhiteNoise = WhiteNoise;
+  module.exports = exports.Noise = Noise;
 
 })(typeof exports === "object" ? exports : (exports = {}));
