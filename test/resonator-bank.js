@@ -9,7 +9,7 @@
     YinPitch,
   } = require('../index');
 
-  it("TESTTESTdefault ctor()", ()=>{
+  it("default ctor()", ()=>{
     let rb = new ResonatorBank();
     let halfLifeSamples = Infinity;
     let length = 10;
@@ -32,7 +32,7 @@
       should(ri).properties({ sampleRate, scale, r});
     }
   });
-  it("TESTTESTcustom ctor()", ()=>{
+  it("custom ctor()", ()=>{
     let length = 20;
     let sampleRate = 44100;
     let halfLifeSamples = Resonator.halfLifeSamples(0.91);

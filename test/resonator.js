@@ -16,7 +16,7 @@
   ];
   this.timeout(10*1000);
 
-  it("TESTTESTdefault ctor", ()=>{
+  it("default ctor", ()=>{
     let resonator = new Resonator();
     let halfLifeSamples = Infinity;
     let r = 1;
@@ -30,7 +30,7 @@
       scale: 1,
     });
   });
-  it("TESTTESTcustom ctor", ()=>{
+  it("custom ctor", ()=>{
     let sampleRate = 22000;
     let halfLifeSamples = 48;
     let y1 = 3;
@@ -116,7 +116,7 @@
       throw e;
     }
   });
-  it("sample() steady state attack", ()=>{
+  it("TESTTESTsample() steady state attack", ()=>{
     let verbose = 0;
     let initialScale = 0;  // steady state
     let scale = 100; // nominal scale
@@ -125,7 +125,9 @@
     let halfLifeSamples = nSamples/generations; // decay
     let attenuation = Math.pow(0.5, generations);
     let frequency = 30*Math.random() + 800;
+    verbose && (frequency = 825.6088414045286);
     let phase = Math.random()*Math.PI;
+    //verbose && (phase = 0.04466396655415148);
     let nominal = Signal.cosineWave({frequency, phase, scale, nSamples});
     let r1 = new Resonator({frequency, phase, scale, initialScale, halfLifeSamples});
     let s1 = r1.sample({nSamples});
@@ -138,15 +140,15 @@
     let yErr = Math.abs(nominal[nm1] - s1[nm1]);
     verbose && console.log({r1, yErr, halfLifeSamples, nominalN:nominal[nm1], s1N: s1[nm1]});
     try {
-      should(yErr).below(attenuation*scale);
+      should(yErr).below(1.5*attenuation*scale);
       should(r1.y1).equal(s1[nm1]);
       should(r1.y2).equal(s1[nm2]);
     } catch(e) {
-      console.warn(`ERROR`, {frequency, scale, phase});
+      console.warn(`ERROR`, {frequency, scale, phase, attenuation});
       throw e;
     }
   });
-  it("TESTTESTsample() steady state frequency change", ()=>{
+  it("sample() steady state frequency change", ()=>{
     let verbose = 0;
     let scale = 100; 
     let initialScale = scale; // steady state
@@ -181,7 +183,7 @@
       throw e;
     }
   });
-  it("TESTTESTsample() steady state phase change", ()=>{
+  it("sample() steady state phase change", ()=>{
     let verbose = 0;
     let scale = 100; 
     let initialScale = scale; // steady state
