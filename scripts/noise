@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert')
+const { exec, execSync } = require('child_process');
+const { logger } = require('log-instance');
+const { WaveFile } = require('wavefile');
+
+const Chart = require('../src/chart');
+const Noise = require('../src/noise');
+const Signal = require('../src/signal');
+
+const APP_DIR = path.dirname(__dirname);
+const argv = process.argv;
+const script = argv[1].split('/').pop();
+
+function help() {
+    console.log(`
+NAME
+        noise - noise generator
+
+SYNOPSIS
+        noise [OPTIONS] 
+
+DESCRIPTION
+        Generate white or pink noise optionally modulated by specified frequency.
+
+    -?, --help
+        Print help
+
+    -ds, --duration-seconds
+        Noise duration in seconds (5)
+
+    -ll, --log-level
+        Logging level: warn, error, [info], debug
+
+    -nf, --noise-frequency
+        Noise modulation frequency (0)
+
+    -nc, --noise-color
+        Noise color: pink, white
+
+    -ns, --noise=-scale
+        Noise scale
+
+    -so, --signal-out WAVFILE
+        Signal output file (/tmp/noise.wav)
+
+    -vb, --verbose
+        Verbose output
+
+`);
+    process.exit(0);
+}
+
+function playSound(sound) {
+  let cmd = `ffplay -nodisp -autoexit -loglevel error -stats ${sound}`;
+  execSync(cmd, {
+    cwd: APP_DIR,
+  });
+}
+
+function die(e) {
+  playSound(SOUND_FAILURE);
+  process.exit(-1);
+}
+
+var cmdCfg = {};
+
+var nargs = argv.length;
+if (nargs < 3) {
+    help();
+}
+for (var i = 2; i < nargs; i++) {
+  var arg = argv[i];
+  let requiredArg = (key=arg)=>{
+    let nextArg = argv[++i];
+    if (nextArg == null) {
+      die(logger.error('E_REQUIRED', `Expected additional information for: ${key}`));
+    }
+    return nextArg;
+  }
+  let requiredNumber = (key=arg)=>{
+    let n = Number(requiredArg());
+    if (isNaN(n)) {
+      die(logger.error(`[E_NUMBER] "${key}" option requires a number:${argv[i]}`));
+    }
+    return n;
+  }
+  if (i<2) { continue; }
+  if (arg === '-?' || arg === '--help') {
+    help();
+  } else if (arg === '-ds' || arg === '--duration-seconds') {
+    cmdCfg.duration = requiredNumber();
+  } else if (arg === '-ll' || arg === '--log-level') {
+    cmdCfg.logLevel = logger.logLevel = requiredArg();
+  } else if (arg === '-nc' || arg === '--noise-color') {
+    cmdCfg.noiseColor = requiredArg();
+  } else if (arg === '-nf' || arg === '--noise-frequency') {
+    cmdCfg.noiseFrequency = requiredNumber();
+  } else if (arg === '-ns' || arg === '--noise-scale') {
+    cmdCfg.noiseScale = requiredNumber();
+  } else if (arg === '-so' || arg === '--signal-out') {
+    cmdCfg.signalOut = requiredArg();
+  } else if (arg === '-vb' || arg === '--verbose') {
+    cmdCfg.verbose = true;
+  } else {
+    die(logger.error('E_UNKNOWN_OPTION', `Unknown option: ${argv[i]}`));
+  }
+}
+
+async function configuration(cfg=cmdCfg) {
+  let { 
+  } = cfg;
+
+  return Object.assign({}, {
+    logLevel: 'info',
+    verbose: false,
+    duration: 5,
+    noiseFrequency: 0,
+    noiseScale: 1,
+    sampleRate: 22050,
+    signalOut: `/tmp/noise.wav`,
+
+  }, cfg, {
+  });
+}
+
+async function writeSignal(fpath, signal) {
+  if (fpath.endsWith('.wav')) {
+    try {
+      let wav = signal.toWav();
+      await fs.promises.writeFile(fpath, wav);
+      logger.info(`writing signal: ${fpath} length: ${wav.length}`);
+    } catch(e) {
+      die(logger.error(`Could not write: ${fpath}`, e.message));
+    }
+  } else {
+    die(logger.error('E_FILE_UNSUPPORTED', `Unsupported file type: ${fpath}`));
+  }
+}
+
+(async function() {
+  let cfg = await configuration(cmdCfg);
+  let msStart = Date.now();
+  let { 
+    duration,
+    noiseColor,
+    noiseFrequency:frequency,
+    noiseScale:scale,
+    sampleRate,
+    signalOut,
+    verbose,
+
+  } = cfg;
+
+  let nSamples = Math.round(duration*sampleRate);
+  if (noiseColor === 'white') {
+    var noise = Noise.createWhiteNoise({nSamples, scale, frequency});
+  } else if (noiseColor === 'pink') {
+    var noise = Noise.createPinkNoise({nSamples, scale, frequency});
+  }
+  assert(noise, `Expected noise color (pink,white)`);
+  let samples = noise.sample();
+  let signal = new Signal(samples);
+
+  if (signalOut) {
+    await writeSignal(signalOut, signal);
+    await playSound(signalOut);
+  }
+
+  process.exit(0);
+})();

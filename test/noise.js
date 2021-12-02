@@ -14,6 +14,7 @@
       variance: 1,
       color: 'white',
       nSamples: 96,
+      scale: 1,
     });
   });
   it("createPinkNoize", ()=>{
@@ -24,6 +25,7 @@
       variance: 1,
       color: 'pink',
       nSamples: 96,
+      scale: 1,
     });
     let { randomBasis } = noise;
     should(randomBasis).instanceOf(Array);
@@ -31,12 +33,15 @@
       should(isNaN(randomBasis[i])).equal(false);
     }
   });
-  it("sample() steady-state white noise", ()=> {
-    let verbose = 0;
+  it("TESTTESTsample() steady-state white noise", ()=> {
+    let verbose = 1;
     let nSamples = 1000;
-    let noise = Noise.createWhiteNoise({nSamples});
+    let scale = 5;
+    let noise = Noise.createWhiteNoise({nSamples, scale});
+    should(noise).properties({scale});
     let samples = noise.sample();
-    let chart = new Chart();
+    let title = `1:white noise (scale:${scale})`;
+    let chart = new Chart({title});
     verbose && chart.plot({data:samples, xInterval:Math.round(nSamples/95)});
     let stats = Signal.stats(samples);
     verbose && console.log({stats});
@@ -47,14 +52,14 @@
       a[iv] = (a[iv] || 0) + 1;
       return a;
     }, {});
-    verbose && console.log({distribution, stdDev2});
+    verbose && console.log({stdDev2});
 
     should(count).equal(nSamples);
     should(max).below(5*stdDev);
     should(min).above(-5*stdDev);
     should(Math.abs(median)).below(3e-1);
     should(Math.abs(avg)).below(3e-1);
-    should(Math.abs(stdDev - 1)).below(5e-2);
+    should(Math.abs(stdDev - scale)).below(scale*0.1);
   });
   it("sample() frequency synchronized white-noise", ()=> {
     let verbose = 0;

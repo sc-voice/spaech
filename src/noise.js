@@ -11,6 +11,7 @@
         frequency = 0,
         nSamples = 96,
         phase = 0,
+        scale = 1,
         randomBasis,
       } = opts;
 
@@ -19,8 +20,8 @@
       let resonator = new Resonator({
         frequency, 
         phase, 
-        scale:1, 
-        initialScale:frequency?1:0, 
+        scale,
+        initialScale:frequency?scale:0, 
       });
 
       Object.assign(this, {
@@ -30,6 +31,7 @@
         nSamples,
         randomBasis,
         resonator,
+        scale,
       })
     }
 
@@ -62,14 +64,14 @@
     }
     
     envelope(opts={}) {
-      let { resonator, basis, } = this;
+      let { resonator, basis, scale} = this;
       let { 
         frequency = this.frequency,
         nSamples = this.nSamples, 
         phase = this.phase,
       } = opts;
       if (frequency === 0) {
-        var envelope = new Array(nSamples).fill(1);
+        var envelope = new Array(nSamples).fill(scale);
       } else {
         var envelope = resonator.sample({nSamples, frequency, phase, })
           .map(v => Math.abs(v)); // scale to the magnitude only
