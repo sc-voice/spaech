@@ -3,7 +3,7 @@
   const assert = require('assert');
   const Resonator = require('./resonator');
 
-  class ResonatorBank { 
+  class Synthesizer { 
     constructor(opts={}) {
       let {
         length = 10,
@@ -71,6 +71,6 @@
 
   }
 
-  module.exports = exports.ResonatorBank = ResonatorBank;
+  module.exports = exports.Synthesizer = Synthesizer;
 
 })(typeof exports === "object" ? exports : (exports = {}));

@@ -1,16 +1,16 @@
-(typeof describe === 'function') && describe("resonator-bank", function() {
+(typeof describe === 'function') && describe("synthesizer", function() {
   const should = require("should");
   const assert = require("assert");
   let {
     Chart,
     Resonator,
-    ResonatorBank,
+    Synthesizer,
     Signal,
     YinPitch,
   } = require('../index');
 
   it("default ctor()", ()=>{
-    let rb = new ResonatorBank();
+    let rb = new Synthesizer();
     let halfLifeSamples = Infinity;
     let length = 10;
     let sampleRate = 22050;
@@ -40,7 +40,7 @@
     let frameSize = 96;
     let frequency = 100;
     let phase = 1;
-    let rb = new ResonatorBank({
+    let rb = new Synthesizer({
       halfLifeSamples, length, sampleRate, scale, frameSize, frequency, phase, 
     });
     should(rb).properties({ 
@@ -61,7 +61,7 @@
     let verbose = 1;
     let length = 3;
     let frameSize = 90;
-    let rb = new ResonatorBank({length, frameSize});
+    let rb = new Synthesizer({length, frameSize});
     should(rb).properties({
       length, frameSize,
     });

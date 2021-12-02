@@ -9,7 +9,7 @@ const { WaveFile } = require('wavefile');
 
 // avoid Tensorflow include via ../index
 const Chart = require('../src/chart');
-const ResonatorBank = require('../src/resonator-bank');
+const Synthesizer = require('../src/synthesizer');
 const Signal = require('../src/signal');
 const YinPitch = require('../src/yin-pitch');
 
@@ -72,7 +72,7 @@ DESCRIPTION
         Minimum signal power for pitch recognition (128)
 
     -rc, --resonator-count COUNT
-        Count of resonators in harmonic helmholz resonator bank (20)
+        Count of resonators in harmonic waveform synthesizer (20)
 
     -ro, --residual-out WAV_FILE
         Residual non-harmonic output file
@@ -274,7 +274,7 @@ function inputsOfFrames(frames, inputSize) {
     window,
 
   } = cfg;
-  let resBank = new ResonatorBank({
+  let resBank = new Synthesizer({
     length: resonatorCount, 
     frameSize,
     halfLifeSamples,
