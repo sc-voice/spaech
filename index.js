@@ -1,4 +1,5 @@
 module.exports = {
+  Analyzer: require('./src/analyzer'),
   AutoEncoder: require('./src/auto-encoder'),
   Chart: require('./src/chart'),
   Compander: require('./src/compander'),

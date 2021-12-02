@@ -86,7 +86,7 @@
       throw e;
     }
   });
-  it("TESTTESTsample() steady state decay", ()=>{
+  it("sample() steady state decay", ()=>{
     let verbose = 0;
     let initialScale = 100;  // steady state
     let scale = 0; // nominal scale
@@ -118,7 +118,7 @@
       throw e;
     }
   });
-  it("TESTTESTsample() steady state attack", ()=>{
+  it("sample() steady state attack", ()=>{
     let verbose = 0;
     let initialScale = 0;  // steady state
     let scale = 100; // nominal scale
@@ -221,7 +221,7 @@
     }
   });
   it("TESTTESTsample() steady state phase change", ()=>{
-    return; // TODO
+    console.warn(`TODO ${__filename}`); return; 
     let verbose = 1;
     let scale = 100; 
     let nSamples = 95;

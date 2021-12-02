@@ -11,7 +11,7 @@ const { WaveFile } = require('wavefile');
 const Chart = require('../src/chart');
 const Synthesizer = require('../src/synthesizer');
 const Signal = require('../src/signal');
-const YinPitch = require('../src/yin-pitch');
+const Analyzer = require('../src/analyzer');
 
 const APP_DIR = path.dirname(__dirname);
 const TEST_DATA_DIR = path.join(APP_DIR, 'test/data');
@@ -67,9 +67,6 @@ DESCRIPTION
 
     -ll, --log-level
         Logging level: warn, error, [info], debug
-
-    -mp, --min-power
-        Minimum signal power for pitch recognition (128)
 
     -rc, --resonator-count COUNT
         Count of resonators in harmonic waveform synthesizer (20)
@@ -146,8 +143,6 @@ for (var i = 2; i < nargs; i++) {
     cmdCfg.harmonicOut = requiredArg();
   } else if (arg === '-hs' || arg === '--half-life-samples') {
     cmdCfg.halfLifeSamples = requiredNumber();
-  } else if (arg === '-mp' || arg === '--min-power') {
-    cmdCfg.minPower = requiredNumber();
   } else if (arg === '-si' || arg === '--signal-in') {
     cmdCfg.signalIn = requiredArg();
   } else if (arg === '-ll' || arg === '--log-level') {
@@ -207,7 +202,6 @@ async function configuration(cfg=cmdCfg) {
     frameSize: 96,
     logLevel: 'info',
     minAmplitude: 1,
-    minPower: 1,
     nHarmonics: 21,
     sample: false,
     resonatorCount: 20,
@@ -261,7 +255,6 @@ function inputsOfFrames(frames, inputSize) {
     halfLifeSamples,
     harmonicOut,
     minAmplitude,
-    minPower,
     nHarmonics,
     sample,
     residualOut,
@@ -285,10 +278,10 @@ function inputsOfFrames(frames, inputSize) {
 
   let sigIn = await wavSignal(signalIn);
   let { data:dataIn, sampleRate } = sigIn;
-  let yp = new YinPitch({
-    sampleRate, diffMax, fMin, fMax, window, minAmplitude, minPower,
+  let analyzer = new Analyzer({
+    sampleRate, diffMax, fMin, fMax, window, minAmplitude, 
   });
-  let nSamples = Math.ceil(yp.minSamples / frameSize) * frameSize;
+  let nSamples = Math.ceil(analyzer.minSamples / frameSize) * frameSize;
   logger.info({nSamples, dataIn:dataIn.length});
   let chart = new Chart({lines:chartLines});
   let resBankFun = (a1,a2)=>resBank.sample(a1,a2);
@@ -301,7 +294,7 @@ function inputsOfFrames(frames, inputSize) {
     if (samples.length === nSamples) {
       let harmonics;
       try {
-        harmonics = yp.harmonics(samples, {nHarmonics});
+        harmonics = analyzer.harmonics(samples, {nHarmonics});
         dataHarmonic = dataHarmonic.concat(resBankFun(harmonics));
       } catch (e) {
         let ferr = path.join(__dirname, '../local/error.json');
@@ -312,7 +305,7 @@ function inputsOfFrames(frames, inputSize) {
       }
       if (harmonics.length) {
         let {frequency:f0, amplitude:a0} = harmonics[0];
-        let { pitch } = yp.pitch(samples);
+        let { pitch } = analyzer.pitch(samples);
         verboseFrame && console.log(verbosePrefix, 
           `${f0.toFixed(1)}Hz`, 
           harmonics

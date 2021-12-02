@@ -34,7 +34,7 @@
     }
   });
   it("TESTTESTsample() steady-state white noise", ()=> {
-    let verbose = 1;
+    let verbose = 0;
     let nSamples = 1000;
     let scale = 5;
     let noise = Noise.createWhiteNoise({nSamples, scale});
@@ -54,12 +54,17 @@
     }, {});
     verbose && console.log({stdDev2});
 
-    should(count).equal(nSamples);
-    should(max).below(5*stdDev);
-    should(min).above(-5*stdDev);
-    should(Math.abs(median)).below(3e-1);
-    should(Math.abs(avg)).below(3e-1);
-    should(Math.abs(stdDev - scale)).below(scale*0.1);
+    try {
+      should(count).equal(nSamples);
+      should(max).below(5*stdDev);
+      should(min).above(-5*stdDev);
+      should(Math.abs(median)).below(4e-1);
+      should(Math.abs(avg)).below(4e-1);
+      should(Math.abs(stdDev - scale)).below(scale*0.1);
+    } catch(e) {
+      console.warn(`WARN ${__filename} may fail`, stats);
+      throw e;
+    }
   });
   it("sample() frequency synchronized white-noise", ()=> {
     let verbose = 0;
