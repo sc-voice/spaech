@@ -50,7 +50,7 @@
       let phase = Math.atan2(imaginary, real) + Math.PI/2;
       if (Math.PI <= phase) { phase -= 2*Math.PI; }
       else if (phase <= -Math.PI) { phase += 2*Math.PI; }
-      return { phase, amplitude, phasor:{real, imaginary}, t1, tEnd, }
+      return { phase, amplitude, phasor:{real, imaginary}, t1, tEnd, nCycles }
     }
 
     harmonics(samples, opts={}) {
@@ -79,6 +79,13 @@
       }
 
       return harmonics;
+    }
+
+    analyzeBlock(samples, opts={}) {
+      let harmonics = this.harmonics(samples, opts);
+      return {
+        harmonics,
+      }
     }
 
   }

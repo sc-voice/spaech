@@ -1,4 +1,3 @@
-
 (typeof describe === 'function') && describe("signal", function() {
   const should = require("should");
   const fs = require('fs');
@@ -116,6 +115,7 @@
   });
   it("stats() => stats", async()=>{
     let dataOdd = [1, 2, 3, 5, 4];
+    let variance = ((4+1+1+4)/5);
     should.deepEqual(Signal.stats(dataOdd), {
       count: 5,
       avg: 3,
@@ -125,7 +125,8 @@
       sum: 15,
       max: 5,
       min: 1,
-      stdDev: Math.sqrt((4+1+1+4)/5),
+      stdDev: Math.sqrt(variance),
+      variance,
     });
     let dataEven = [1, 2, 3, 5, 4, 60];
     should.deepEqual(Signal.stats(dataEven), {
@@ -138,6 +139,7 @@
       max: 60,
       min: 1,
       stdDev: 21.2818388929779, /* population standard deviation */
+      variance: 452.9166666666667, 
     });
     let data = [2, 4, 4, 4, 5, 5, 7, 9];
     should.deepEqual(Signal.stats(data), {
@@ -150,7 +152,48 @@
       max: 9,
       min: 2,
       stdDev: 2, /* population standard deviation */
+      variance: 4,
     });
+  });
+  it("TESTTESTstats() harmonics", ()=>{
+    let verbose = 0;
+    let f0 = 200;
+    let frequencies = [f0, 2*f0, 4*f0]; // harmonics
+    let scales = [5*Math.random(),3,2];
+    let phases = [Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI];
+    let dc = 2; // dc is not part of power
+    let nSamples = Math.round(Math.random()*100+800);
+    verbose && (nSamples = 857);
+    let xInterval = Math.ceil(nSamples/95);
+    let sines = frequencies.map((frequency,i)=>
+      Signal.sineWave({ frequency, scale:scales[i], phase:phases[i], nSamples})
+      .map(v=>v+dc));
+    let stats = sines.map(sine=>Signal.stats(sine));
+    let chart = new Chart({xInterval});
+    let sinePower = scales.map(scale=>scale * scale / 2); 
+    let expErr = 2.5e-1;
+    try {
+      for (let i = 0; i < stats.length; i++) {
+        should(Math.abs(stats[i].variance - sinePower[i])).below(expErr);
+      }
+    } catch (e) {
+      console.warn(`ERROR sines`, {nSamples, scales});
+      throw e;
+    }
+    let sumSines = new Array(nSamples).fill(0)
+      .map((v,i)=>sines.reduce(((a,sine,j)=>a+sines[j][i]),0));
+
+    let statsSum = Signal.stats(sumSines);
+    verbose && console.log({stats, statsSum});
+    verbose && chart.plot({data:[...sines, sumSines]});
+    try { 
+      // Apparently, the sum of harmonic variances is the variance of the sum (!)
+      let sumVariances = stats.reduce(((a,stats)=> a+stats.variance), 0);
+      should(Math.abs(sumVariances - statsSum.variance)).below(3*expErr);
+    } catch (e) {
+      console.warn(`ERROR sumSines`, {nSamples, scales, phases});
+      throw e;
+    }
   });
   it("rmsErr(a,b) => root mean square error", ()=>{
     let a = [1,2,3,4,5];
@@ -257,6 +300,7 @@
       avg: 0.8914376867599811,
       median: -1,
       stdDev: 1803.544548440329,
+      variance: 3252772.93820883,
     });
     should(s16[stats.iMin]).equal(stats.min);
     should(s16[stats.iMax]).equal(stats.max);

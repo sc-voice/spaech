@@ -31,7 +31,7 @@
         type=Array,
       } = args;
 
-      assert(Number.isInteger(tStart), 
+      0 && assert(Number.isInteger(tStart), 
         `[E_TSTART] expected non-negative integer:${tStart}`);
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
@@ -68,7 +68,7 @@
         type=Array,
       } = args;
 
-      assert(Number.isInteger(tStart), 
+      0 && assert(Number.isInteger(tStart), 
         `[E_TSTART] expected non-negative integer:${tStart}`);
       let samples = type === Array
          ? [...new Int8Array(nSamples)]
@@ -159,7 +159,8 @@
           iMax = i;
         }
       }
-      let stdDev = Math.sqrt(sqDev/count);
+      let variance = sqDev/count;
+      let stdDev = Math.sqrt(variance);
 
       return { 
         count, 
@@ -171,6 +172,7 @@
         avg, 
         median, 
         stdDev,
+        variance,
       }
     }
 

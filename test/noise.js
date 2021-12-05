@@ -58,8 +58,8 @@
       should(count).equal(nSamples);
       should(max).below(5*stdDev);
       should(min).above(-5*stdDev);
-      should(Math.abs(median)).below(4e-1);
-      should(Math.abs(avg)).below(4e-1);
+      should(Math.abs(median)).below(7e-1);
+      should(Math.abs(avg)).below(7e-1);
       should(Math.abs(stdDev - scale)).below(scale*0.1);
     } catch(e) {
       console.warn(`WARN ${__filename} may fail`, stats);

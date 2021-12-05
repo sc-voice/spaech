@@ -2,6 +2,7 @@
   const { logger } = require('log-instance');
   const assert = require('assert');
   const Resonator = require('./resonator');
+  const Signal = require('./signal');
 
   class Synthesizer { 
     constructor(opts={}) {
@@ -31,6 +32,32 @@
         scale,
       });
     }
+
+    static sampleSineWaves(args={}) {
+      let {
+        sineWaves = [],
+        nSamples = 96,
+        sampleRate = 22050,
+        tStart = 0,
+      } = args;
+      assert(0<sineWaves.length, `expected array of sineWave declarations`);
+      sineWaves.forEach(wave=>{
+        let {frequency, scale, phase} = wave;
+        Object.defineProperty(wave, 'samples', { // non-enumerable
+          value: Signal.sineWave({frequency, nSamples, phase, scale, sampleRate, tStart,
+        })});
+        wave.samplesPerCycle = sampleRate/frequency;
+      });
+      let samples = sineWaves.reduce((a,wave)=>{
+        let { samples } = wave;
+        return a == null
+          ? samples
+          : samples.map((v,i) => v + a[i]);
+      }, null);
+
+      return samples;
+    }
+
 
     get halfLifeSamples() {
       let r0 = this.resonators[0] || {};
