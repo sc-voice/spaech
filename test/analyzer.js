@@ -105,7 +105,7 @@
     }
   });
   it("TESTTESTharmonics() detects f0,f1,...", ()=>{
-    let verbose = 1;
+    let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
     let width = 95;
@@ -115,9 +115,9 @@
     let scale0 = 10000;
     let nHarmonics = 3;
     let phases = new Array(nHarmonics).fill(0).map(v=>2*Math.PI*Math.random()-Math.PI);
-    verbose && (phases = [-1.2329875150848355, 2.955960589184895, -0.9914889937065183]);
+    verbose && (phases = [ 0.6225201970997261, -0.630364209057956, 1.9719893663800256 ]);
     let scales = new Array(nHarmonics).fill(0).map((v,i)=>scale0*(i===0?1:Math.random()));
-    verbose && (scales = [ 10000, 188.03937174292963, 6544.039197271653 ]);
+    verbose && (scales = [ 10000, 9824.307325930582, 6019.116275983296 ]);
     let tSample = nSamples/2;
 
     let harmonicsIn = [
@@ -144,15 +144,18 @@
           let dFreq = Math.abs(frequency - hOut.frequency);
           let dPhase = Math.abs(phase - hOut.phase);
           let dAmplitude = Math.abs(scale - hOut.amplitude);
-          verbose && console.log(`harmonicsOut[${i}]`, {dFreq, dPhase, dAmplitude, hOut});
+          verbose && console.log(`harmonicsOut[${i}]`, 
+            {dFreq, dPhase, dAmplitude, hOut:JSON.stringify(hOut)});
           should(dFreq).equal(0); // source pitch digitization optimization (!)
-          should(dPhase).below(7e-1); 
-          should(dAmplitude/scale).below(2);
+          should(dPhase).below(7e-2); 
+          should(dAmplitude/scale).below(4e-2);
         } else {
           should(hOut).equal(undefined);
         }
       } catch(e) {
-        console.error(`ERROR`, {phases, scales, phase, scale, hIn, hOut}, e.message);
+        console.error(`ERROR`, {phases, scales, phase, scale, 
+          hIn:JSON.stringify(hIn), hOut:JSON.stringify(hOut)}, 
+          e.message);
         throw e;
       }
     });

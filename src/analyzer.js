@@ -65,21 +65,46 @@
       let f0Pitch = this.pitch(samples);
       let { pitch:f0, } = f0Pitch;
       if (f0 === 0) { return []; }
-
-      samples = samples.slice(); 
       let nSamples = samples.length;
-      let harmonics = [];
       let samplesPerCycle = sampleRate/f0;
-      let f0Samples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
+      let f0Samples = Math.round(Math.floor(nSamples/samplesPerCycle) * samplesPerCycle);
       let tStart = -tSample;
+
+      // estimate harmonic amplitudes
+      let sbuf = samples.slice(); 
+      let harmonics = [];
       for (let i=0; i < nHarmonics; i++) {
         let frequency = (i+1)*f0;
-        let pa = this.phaseAmplitude({samples, frequency});
+        let pa = this.phaseAmplitude({samples:sbuf, frequency});
         if (minAmplitude < pa.amplitude) {
           let { phase, amplitude } = pa;
           harmonics.push({ frequency, phase, amplitude, order:i});
-          samples = Signal.sineWave({nSamples, frequency, phase, scale:amplitude, tStart})
-            .map((v,j)=>(samples[j]-v)); // subtract analyzed harmonic from signal
+          sbuf = Signal.sineWave({nSamples, frequency, phase, scale:amplitude, tStart})
+            .map((v,j)=>(sbuf[j]-v)); // subtract analyzed harmonic from signal
+        } else {
+          verbose && console.log(`harmonics rejected`, {frequency, minAmplitude, pa, f0Samples});
+        }
+      }
+
+      // In general, f0 is not a factor of sampleRate, so we
+      // subtract higher amplitude harmonics from the signal
+      // to get a finer resolution for lower amplitude harmonics.
+      let orders = harmonics.map(h=>h.order)
+        .sort((a,b)=>harmonics[b].amplitude - harmonics[a].amplitude);
+      //verbose && orders.forEach(i=>console.log(harmonics[i].amplitude));
+
+      sbuf = samples.slice(); 
+      for (let i=0; i < nHarmonics; i++) {
+        let order = orders[i];
+        let harmonic = harmonics[order];
+        let { frequency } = harmonic;
+        let pa = this.phaseAmplitude({samples:sbuf, frequency});
+        if (minAmplitude < pa.amplitude) {
+          let { phase, amplitude } = pa;
+          harmonic.phase = pa.phase;
+          harmonic.amplitude = pa.amplitude;
+          sbuf = Signal.sineWave({nSamples, frequency, phase, scale:amplitude, tStart})
+            .map((v,j)=>(sbuf[j]-v)); // subtract analyzed harmonic from signal
         } else {
           verbose && console.log(`harmonics rejected`, {frequency, minAmplitude, pa, f0Samples});
         }
