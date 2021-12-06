@@ -33,7 +33,7 @@
       should(isNaN(randomBasis[i])).equal(false);
     }
   });
-  it("TESTTESTsample() steady-state white noise", ()=> {
+  it("sample() steady-state white noise", ()=> {
     let verbose = 0;
     let nSamples = 1000;
     let scale = 5;

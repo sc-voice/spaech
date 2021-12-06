@@ -59,22 +59,29 @@
         sampleRate = this.sampleRate,
         minAmplitude = this.minAmplitude,
         maxAmplitude = this.maxAmplitude,
+        tSample = this.tSample,
         verbose,
       } = opts;
       let f0Pitch = this.pitch(samples);
       let { pitch:f0, } = f0Pitch;
+      if (f0 === 0) { return []; }
+
+      samples = samples.slice(); 
+      let nSamples = samples.length;
       let harmonics = [];
-      if (f0) {
-        let samplesPerCycle = sampleRate/f0;
-        let f0Samples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
-        for (let i=0; i < nHarmonics; i++) {
-          let frequency = (i+1)*f0;
-          let pa = this.phaseAmplitude({samples, frequency});
-          if (minAmplitude < pa.amplitude) {
-            harmonics.push({ frequency, phase:pa.phase, amplitude:pa.amplitude, order:i});
-          } else {
-            verbose && console.log(`harmonics rejected`, {frequency, minAmplitude, pa, f0Samples});
-          }
+      let samplesPerCycle = sampleRate/f0;
+      let f0Samples = Math.round(Math.floor(samples.length/samplesPerCycle) * samplesPerCycle);
+      let tStart = -tSample;
+      for (let i=0; i < nHarmonics; i++) {
+        let frequency = (i+1)*f0;
+        let pa = this.phaseAmplitude({samples, frequency});
+        if (minAmplitude < pa.amplitude) {
+          let { phase, amplitude } = pa;
+          harmonics.push({ frequency, phase, amplitude, order:i});
+          samples = Signal.sineWave({nSamples, frequency, phase, scale:amplitude, tStart})
+            .map((v,j)=>(samples[j]-v)); // subtract analyzed harmonic from signal
+        } else {
+          verbose && console.log(`harmonics rejected`, {frequency, minAmplitude, pa, f0Samples});
         }
       }
 

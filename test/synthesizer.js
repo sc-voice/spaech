@@ -83,8 +83,8 @@
       should(Math.abs(halfLifeSamples-ri.halfLifeSamples)).below(4e-15);
     }
   });
-  it("sample()" , ()=>{
-    return; // TODO: TESTTEST
+  it("TESTTESTsample()" , ()=>{
+    console.log(`TODO ${__filename}`); return;
     let verbose = 1;
     let length = 3;
     let frameSize = 90;
@@ -122,7 +122,7 @@
     should(stats2a.stdDev).above(1).below(stats1.stdDev);
     should(stats2b.stdDev).above(1).below(stats2a.stdDev);
   });
-  it("TESTTESTsample() generates f0,f1,...", ()=>{
+  it("sample() generates f0,f1,...", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;

@@ -155,7 +155,7 @@
       variance: 4,
     });
   });
-  it("TESTTESTstats() harmonics", ()=>{
+  it("stats() harmonics", ()=>{
     let verbose = 0;
     let f0 = 200;
     let frequencies = [f0, 2*f0, 4*f0]; // harmonics
