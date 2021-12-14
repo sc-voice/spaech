@@ -93,6 +93,8 @@
     let nSamples = 1000;
     let noise = Noise.createPinkNoise({nSamples});
     let samples = noise.sample();
+    should(samples.length).equal(nSamples);
+    should(isNaN(samples[samples.length-1])).equal(false);
     let chart = new Chart();
     verbose && chart.plot({data:samples, xInterval:Math.round(nSamples/95)});
     let stats = Signal.stats(samples);
@@ -131,7 +133,7 @@
     verbose && console.log({periodSamples, statsLo, statsHi});
 
     // noise at signal peak is higher than at zero crossing
-    should(Math.abs(statsLo.stdDev)).below(0.9*Math.abs(statsHi.stdDev)); // AC
+    should(Math.abs(statsLo.stdDev)).below(0.8*Math.abs(statsHi.stdDev)); // AC
   });
 
 })

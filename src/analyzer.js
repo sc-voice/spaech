@@ -10,16 +10,18 @@
       let {
         minAmplitude = POLLY_AMPLITUDE * .005,  // noise rejection
         maxAmplitude = POLLY_AMPLITUDE,         // speaking voice
+        phasePrecision = 3,                     // digitized phase
       } = args;
 
       Object.assign(this, {
         minAmplitude,
         maxAmplitude,
+        phasePrecision,
       });
     }
 
     phaseAmplitude({samples, frequency, verbose}) {
-      let { sampleRate, tSample, } = this;
+      let { sampleRate, tSample, phasePrecision} = this;
       assert(Array.isArray(samples) || ArrayBuffer.isView(samples),
         `[E_SAMPLES] expected signal samples`);
       assert(!isNaN(frequency) && 0 < frequency, `[E_FREQUENCY] must be positive number:${frequency}`);
@@ -50,6 +52,7 @@
       let phase = Math.atan2(imaginary, real) + Math.PI/2;
       if (Math.PI <= phase) { phase -= 2*Math.PI; }
       else if (phase <= -Math.PI) { phase += 2*Math.PI; }
+      phase = Number(phase.toFixed(phasePrecision));
       return { phase, amplitude, phasor:{real, imaginary}, t1, tEnd, nCycles }
     }
 
