@@ -116,7 +116,7 @@
       return harmonics;
     }
 
-    analyzeBlock(samples, opts={}) {
+    analyze(samples, opts={}) {
       let harmonics = this.harmonics(samples, opts);
       return {
         harmonics,

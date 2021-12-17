@@ -51,7 +51,7 @@
     return samples;
   }
 
-  it("TESTTESTdefault ctor()", ()=>{
+  it("default ctor()", ()=>{
     let verbose = 0;
     let sampleRate = 22050; // default
     let fMin = FMIN;
@@ -69,7 +69,7 @@
       phasePrecision, pitchPrecision,
     });
   });
-  it("TESTTESTphaseAmplitude() sin 140Hz", ()=>{
+  it("phaseAmplitude() sin 140Hz", ()=>{
     let verbose = 0;
     let scale = 10000;
     let sampleRate = 22050;
@@ -183,7 +183,7 @@
       }
     });
   });
-  it("TESTTESTharmonics() detects noise", ()=>{
+  it("harmonics() with noise", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
@@ -248,7 +248,7 @@
       }
     });
   });
-  it("TESTTESTphaseError", ()=>{
+  it("phaseError", ()=>{
     should(phaseError(1,2)).equal(1);
     should(phaseError(2,1)).equal(1);
     should(phaseError(6,7)).equal(1);
@@ -257,6 +257,51 @@
     should(phaseError(7,1)).equal(Math.PI*2-6);
     should(phaseError(-6,0)).equal(Math.PI*2-6);
     should(phaseError(1,-6)).equal(1-(Math.PI*2-6));
+  });
+  it("TESTTESTanalyze() detects noise", ()=>{
+    console.log(`TODO ${__filename}`); return;
+    let verbose = 1;
+    let sampleRate = 22050;
+    let samplePeriod = 1/sampleRate;
+    let width = 95;
+    let xInterval = 9;
+    let nSamples = xInterval*width;
+    let f0 = 140;
+    let scale0 = 100;
+    let noiseScale = scale0 * 0.2;
+    0 && (noiseScale = 0);
+    let nHarmonics = 3;
+    let phases = new Array(nHarmonics).fill(0).map(v=>(2*Math.PI*Math.random()-Math.PI));
+    verbose && (phases = [ 0.978, -0.827, -0.009 ]);
+    phases = phases.map(v=>Number(v.toFixed(3)));
+    let scales = new Array(nHarmonics).fill(0).map((v,i)=>scale0*(i===0?1:Math.random()));
+    verbose && (scales = [ 100, 30, 80 ]);
+    let pinkNoise = Noise.createPinkNoise({
+      nSamples, sampleRate, frequency:f0, phase: phases[0], scale: noiseScale});
+    let noise = pinkNoise.sample();
+    let noiseStats = Signal.stats(noise);
+    let tSample = nSamples/2;
+
+    let harmonicsIn = [
+      { frequency: f0, phase: phases[0], scale: scales[0], },
+      { frequency: 2*f0, phase: phases[1], scale: scales[1], },
+      { frequency: 3*f0, phase: phases[2], scale: scales[2], },
+    ];
+    let samples = Synthesizer.sampleSineWaves({
+      sineWaves:harmonicsIn, nSamples, sampleRate, tStart:-tSample})
+      .map((v,i) => v + noise[i]);
+    let title = `1:samples (nSamples:${nSamples})`;
+    let chart = new Chart({lines:9, width, title, xInterval, yAxis:tSample});
+    verbose && chart.plot({data:samples});
+    let stats = Signal.stats(samples);
+
+    let analyzer = new Analyzer({tSample});
+
+    let minAmplitude = scale0 * 0.003;
+    //let { harmonics, noise:noiseOut } = analyzer.analyze(samples, {nHarmonics, minAmplitude, verbose});
+    let powHIn = harmonicsIn.reduce(((a,h)=>a+h.scale*h.scale), 0)/2;
+    let pow = powHIn + noiseScale*noiseScale;
+    console.log({harmonicsIn, noiseScale, stats, powHIn, pow, nSamples, two:1/Math.sqrt(2), noiseStats});
   });
 
 })
