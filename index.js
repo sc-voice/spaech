@@ -1,6 +1,8 @@
 module.exports = {
   Analyzer: require('./src/analyzer'),
   AutoEncoder: require('./src/auto-encoder'),
+  Bode: require('./src/bode'),
+  Butterworth: require('./src/butterworth'),
   Chart: require('./src/chart'),
   Compander: require('./src/compander'),
   Int16Frames: require('./src/int16-frames'),

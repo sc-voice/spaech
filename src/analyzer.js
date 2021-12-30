@@ -28,9 +28,10 @@
       let samplesPerCycle = sampleRate/frequency;
 
       // If possible, sample two cycles for best accuracy (i.e. accuracy 1e-15 vs 4e-3)
-      let nCycles = Math.floor(samples.length/samplesPerCycle); 
+      let nCycles = Math.floor((samples.length-2)/samplesPerCycle); 
       let cycleSamples = Math.round(samplesPerCycle * nCycles);
-      assert(0<cycleSamples, `[E_SAMPLES_LENGTH] minimum:${cycleSamples} actual:${samples.length}`);
+      assert(0<cycleSamples, 
+        `[E_SAMPLES_LENGTH] frequency:${frequency} minimum:${cycleSamples} actual:${samples.length}`);
 
       let tStart = -tSample;
       let nSamples = samples.length;
@@ -38,14 +39,17 @@
       let sine = Signal.sineWave({frequency, nSamples, tStart});
       let real = 0;
       let imaginary = 0;
-      let t1 = Math.max(0,Math.round(tSample-cycleSamples/2));
+      let t1 = Math.round((nSamples-cycleSamples)/2);
       let tEnd = t1+cycleSamples;
       verbose && console.log(`phaseAmplitude`, {
-        tStart, t1, tEnd, nSamples, samplesPerCycle, cycleSamples, nCycles, 
+        frequency, tStart, t1, tEnd, nSamples, samplesPerCycle, cycleSamples, nCycles, 
         slength:samples.length, tSample});
+      assert(tEnd < nSamples,   
+        `expected ${tEnd+1} samples for frequency:${frequency} nSamples:${nSamples}`);
       for (let t = t1; t < tEnd; t++) {
         let st = samples[t];
         real += st * cosine[t];
+        let s = JSON.stringify({real, st, t, cosine: cosine[t]});
         imaginary -= st * sine[t];
       }
       let amplitude = 2*Math.sqrt(real*real + imaginary*imaginary)/cycleSamples;
@@ -53,7 +57,7 @@
       if (Math.PI <= phase) { phase -= 2*Math.PI; }
       else if (phase <= -Math.PI) { phase += 2*Math.PI; }
       phase = Number(phase.toFixed(phasePrecision));
-      return { phase, amplitude, phasor:{real, imaginary}, t1, tEnd, nCycles }
+      return { frequency, phase, amplitude, phasor:{real, imaginary}, t1, tEnd, nCycles }
     }
 
     harmonics(samples, opts={}) {

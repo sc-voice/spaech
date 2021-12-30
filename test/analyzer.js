@@ -1,6 +1,7 @@
 (typeof describe === 'function') && describe("analyzer", function() {
   const should = require("should");
   const fs = require('fs');
+  const { logger } = require('log-instance');
   const path = require('path');
   let {
     Analyzer,
@@ -183,7 +184,7 @@
       }
     });
   });
-  it("harmonics() with noise", ()=>{
+  it("TESTTESTharmonics() with noise", ()=>{
     let verbose = 0;
     let sampleRate = 22050;
     let samplePeriod = 1/sampleRate;
@@ -298,10 +299,27 @@
     let analyzer = new Analyzer({tSample});
 
     let minAmplitude = scale0 * 0.003;
-    //let { harmonics, noise:noiseOut } = analyzer.analyze(samples, {nHarmonics, minAmplitude, verbose});
     let powHIn = harmonicsIn.reduce(((a,h)=>a+h.scale*h.scale), 0)/2;
     let pow = powHIn + noiseScale*noiseScale;
     console.log({harmonicsIn, noiseScale, stats, powHIn, pow, nSamples, two:1/Math.sqrt(2), noiseStats});
+  });
+  it("phaseAmplitude() handles different frequencies", ()=> {
+    let verbose = 0;
+    let nSamples = 20*95;
+    let scale = 5;
+    let noise = Noise.createWhiteNoise({nSamples, scale});
+    let analyzer = new Analyzer();
+    let samples = noise.sample();
+    let frequency = 10000*Math.random() + 80;
+    verbose && (frequency = 8849.645176340044 );
+    try {
+      let analysis = analyzer.phaseAmplitude({samples, frequency, verbose});
+      let stats = Signal.stats(samples);
+      verbose && console.log({analysis, stats});
+    } catch(e) {
+      logger.warn(`ERROR`, frequency);
+      throw e;
+    }
   });
 
 })

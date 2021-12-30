@@ -1,6 +1,7 @@
 (typeof describe === 'function') && describe("noise", function() {
   const should = require("should");
   let {
+    Analyzer,
     Chart,
     Signal,
     Noise,
@@ -138,7 +139,7 @@
     verbose && console.log({periodSamples, statsLo, statsHi});
 
     // noise at signal peak is higher than at zero crossing
-    should(Math.abs(statsLo.stdDev)).below(0.8*Math.abs(statsHi.stdDev)); // AC
+    should(Math.abs(statsLo.stdDev)).below(0.9*Math.abs(statsHi.stdDev)); // AC
   });
 
 })
